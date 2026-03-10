@@ -75,7 +75,7 @@ react-home-made/
 | ---------- | -------------------------------------------------------------------------- |
 | Frontend   | **React 18+** com **TypeScript**                                           |
 | Backend    | **Node.js** com **TypeScript** (Express, Fastify ou Koa — à sua escolha)   |
-| Banco      | **PostgreSQL** (obrigatório) com ORM/Query Builder à sua escolha           |
+| Banco      | **PostgreSQL** ou **MySql** ou **MongoDB** (obrigatório) com ORM/Query Builder à sua escolha se aplicável           |
 | Testes     | Framework de sua escolha (Jest, Vitest, etc.)                              |
 
 Bibliotecas adicionais são permitidas, mas cada uma deve ser justificada no `DECISIONS.md`.
