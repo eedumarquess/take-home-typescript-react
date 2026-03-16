@@ -17,18 +17,18 @@ Primary references:
 - `docs/api-spec.md`
 - `docs/database-schema.md`
 - `docs/evaluation-criteria.md`
-- `docs/DECISIONS.md`
+- `DECISIONS.md`
 - `seed/data.json`
 
 ## Current Decisions Already Recorded
 
-The existing `docs/DECISIONS.md` records these initial choices:
+The repository `DECISIONS.md` records these initial choices:
 
 - DDD-style architecture
 - Prisma as ORM
 - Biome configured
 
-Important: the challenge requires a `DECISIONS.md` at the repository root for final delivery. If work continues, keep that file updated there even if `docs/DECISIONS.md` was the starting note.
+Important: the challenge requires a `DECISIONS.md` at the repository root for final delivery. Keep that file updated as the single authoritative decision log.
 
 ## Non-Negotiable Technical Constraints
 
@@ -36,6 +36,7 @@ Important: the challenge requires a `DECISIONS.md` at the repository root for fi
 - Keep `strict: true`.
 - Do not use `any` unless there is an exceptional and well-justified reason.
 - Backend must use JWT auth with access token expiry of `15m` and refresh token expiry of `7d`.
+- Access tokens must be used as Bearer tokens and refresh tokens must rotate via `httpOnly` cookie transport.
 - Passwords must be hashed with bcrypt, at least 10 salt rounds.
 - Protected routes must return `401` for invalid/expired tokens and `403` for insufficient permissions.
 - Rate limiting is required: maximum `100 requests per minute per IP`.
@@ -83,7 +84,7 @@ Rules:
 - `imageUrl`: optional valid URL
 - `preparationTime`: integer from 1 to 120
 - cannot delete a product linked to orders in `pending` or `preparing`
-- unavailable products must stay visible in admin flows, but not in public-facing listings
+- unavailable products must stay visible in admin flows and must not be accepted in new orders
 - list endpoints must support pagination, name search, category filter, availability filter, and sorting
 
 ## Order Rules
@@ -96,6 +97,8 @@ Order fields include:
 - status
 - total amount
 - optional delivery person
+- `deliveredAt`
+- status history events
 
 Statuses:
 
@@ -123,7 +126,7 @@ Other order rules:
 - `totalAmount` is always calculated by the backend
 - each `order_item` must snapshot `unitPrice` at order creation time
 - new orders cannot include unavailable products
-- order listing must support pagination, status filtering, and sorting
+- order listing must support pagination, status filtering, date-range filtering, and sorting
 
 ## Delivery Person Rules
 
@@ -154,7 +157,7 @@ The frontend must expose reports backed by the backend for:
 
 Report filters:
 
-- support date range inputs where specified
+- support optional date range inputs across all report endpoints
 
 Frontend expectations:
 
@@ -204,7 +207,7 @@ Important route groups:
 - `PATCH /api/orders/:id/status`
 - `PATCH /api/orders/:id/assign`
 - `POST /api/orders/optimize-assignment`
-- `GET/POST/PUT/DELETE /api/delivery-persons`
+- `GET/POST/PUT/DELETE /api/delivery-persons` for `admin` only
 - `GET /api/reports/revenue`
 - `GET /api/reports/orders-by-status`
 - `GET /api/reports/top-products`
@@ -223,6 +226,8 @@ Important modeling expectations:
 - indexes for filters, ordering, and reports
 - `updated_at` should auto-update
 - `orders.status + created_at` composite index is recommended
+- `orders.delivered_at` is required for delivery-time analytics
+- `order_status_events` is recommended and should be treated as part of the reference model
 - coordinates should preserve precision
 
 Recommended seed behavior:
@@ -240,6 +245,7 @@ The seed file already includes:
 - products across `meal`, `drink`, `dessert`, and `side`
 - active and inactive delivery persons
 - sample orders in multiple statuses, including `ready`, `delivering`, `delivered`, and `cancelled`
+- historical order timestamps suitable for analytics and optimization tests
 
 The geographic sample data is centered around Sao Paulo and should be kept compatible with the optimization feature.
 

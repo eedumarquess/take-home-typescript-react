@@ -1,3 +1,0 @@
-- Arquitetura Driven Domain Design escolhida
-- Prisma usado como ORM
-- Biome configurado
