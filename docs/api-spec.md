@@ -10,7 +10,7 @@ Formato de resposta padrao: `application/json`.
 
 ### POST /api/auth/login
 
-Autentica um usuario e retorna os tokens.
+Autentica um usuario, retorna o access token e inicia a sessao com refresh token em cookie `httpOnly`.
 
 **Request Body:**
 ```json
@@ -24,7 +24,6 @@ Autentica um usuario e retorna os tokens.
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
   "user": {
     "id": "uuid",
     "email": "admin@fastmeals.com",
@@ -33,12 +32,19 @@ Autentica um usuario e retorna os tokens.
 }
 ```
 
+**Set-Cookie:**
+
+```text
+refreshToken=<jwt>; HttpOnly; Path=/api/auth/refresh; SameSite=Strict; Secure
+```
+
 **Response 401:**
 ```json
 {
   "error": {
     "code": "INVALID_CREDENTIALS",
-    "message": "Email ou senha invalidos"
+    "message": "Email ou senha invalidos",
+    "details": []
   }
 }
 ```
@@ -47,21 +53,21 @@ Autentica um usuario e retorna os tokens.
 
 ### POST /api/auth/refresh
 
-Gera um novo access token a partir de um refresh token valido.
+Gera um novo access token a partir de um refresh token valido enviado via cookie `httpOnly`.
 
-**Request Body:**
-```json
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
+**Request Body:** nenhum.
 
 **Response 200:**
 ```json
 {
-  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
+  "accessToken": "eyJhbGciOiJIUzI1NiIs..."
 }
+```
+
+**Set-Cookie:**
+
+```text
+refreshToken=<novo-jwt>; HttpOnly; Path=/api/auth/refresh; SameSite=Strict; Secure
 ```
 
 **Response 401:**
@@ -69,7 +75,8 @@ Gera um novo access token a partir de um refresh token valido.
 {
   "error": {
     "code": "INVALID_REFRESH_TOKEN",
-    "message": "Refresh token invalido ou expirado"
+    "message": "Refresh token invalido ou expirado",
+    "details": []
   }
 }
 ```
@@ -136,7 +143,8 @@ Retorna um produto pelo ID.
 {
   "error": {
     "code": "PRODUCT_NOT_FOUND",
-    "message": "Produto nao encontrado"
+    "message": "Produto nao encontrado",
+    "details": []
   }
 }
 ```
@@ -200,7 +208,8 @@ Remove um produto. **Requer perfil `admin`.**
 {
   "error": {
     "code": "PRODUCT_IN_USE",
-    "message": "Nao e possivel deletar este produto pois ele esta vinculado a pedidos com status 'pending' ou 'preparing'"
+    "message": "Nao e possivel deletar este produto pois ele esta vinculado a pedidos com status 'pending' ou 'preparing'",
+    "details": []
   }
 }
 ```
@@ -210,7 +219,8 @@ Remove um produto. **Requer perfil `admin`.**
 ## Pedidos
 
 > Todas as rotas requerem autenticacao.
-> Criacao e alteracao de status requerem perfil `admin`.
+> `GET` e permitido para `admin` e `viewer`.
+> Criacao, atribuicao e alteracao de status requerem perfil `admin`.
 
 ### GET /api/orders
 
@@ -223,6 +233,8 @@ Lista pedidos com paginacao e filtros.
 | `page`      | integer | Nao         | Pagina atual (default: 1)                         |
 | `limit`     | integer | Nao         | Itens por pagina (default: 20, max: 100)          |
 | `status`    | string  | Nao         | Filtro por status (ex: `pending`, `delivering`)   |
+| `startDate` | string  | Nao         | Filtro inicial de criacao no formato `YYYY-MM-DD` |
+| `endDate`   | string  | Nao         | Filtro final de criacao no formato `YYYY-MM-DD`   |
 | `sortBy`    | string  | Nao         | `createdAt` ou `totalAmount` (default: `createdAt`) |
 | `sortOrder` | string  | Nao         | `asc` ou `desc` (default: `desc`)                 |
 
@@ -251,6 +263,7 @@ Lista pedidos com paginacao e filtros.
           "unitPrice": 32.90
         }
       ],
+      "deliveredAt": null,
       "createdAt": "2025-01-20T14:30:00Z",
       "updatedAt": "2025-01-20T14:30:00Z"
     }
@@ -297,6 +310,7 @@ Cria um novo pedido. **Requer perfil `admin`.**
 - O backend deve calcular o `totalAmount` com base nos precos atuais dos produtos
 - O `unitPrice` de cada item deve ser registrado no momento da criacao (snapshot do preco)
 - Status inicial: `pending`
+- O backend deve registrar um evento inicial no historico de status
 - Todos os produtos devem existir e estar disponiveis (`isAvailable = true`)
 
 **Response 201:** Objeto do pedido criado (com `totalAmount` calculado).
@@ -336,7 +350,8 @@ Altera o status de um pedido. **Requer perfil `admin`.**
 {
   "error": {
     "code": "INVALID_STATUS_TRANSITION",
-    "message": "Nao e possivel alterar o status de 'delivered' para 'pending'"
+    "message": "Nao e possivel alterar o status de 'delivered' para 'pending'",
+    "details": []
   }
 }
 ```
@@ -355,8 +370,10 @@ Atribui um entregador a um pedido. **Requer perfil `admin`.**
 ```
 
 **Comportamento:**
+- O pedido deve estar com status `ready` para receber atribuicao
 - O entregador deve existir e estar ativo (`isActive = true`)
 - O entregador nao pode estar atribuido a outro pedido com status `delivering`
+- Reatribuicao so e permitida enquanto o pedido ainda estiver `ready`
 
 **Response 200:** Objeto do pedido atualizado com o entregador.
 
@@ -365,7 +382,30 @@ Atribui um entregador a um pedido. **Requer perfil `admin`.**
 {
   "error": {
     "code": "DELIVERY_PERSON_UNAVAILABLE",
-    "message": "Este entregador ja esta atribuido a outro pedido em andamento"
+    "message": "Este entregador ja esta atribuido a outro pedido em andamento",
+    "details": []
+  }
+}
+```
+
+**Response 422 (pedido nao pode receber atribuicao):**
+```json
+{
+  "error": {
+    "code": "ORDER_ASSIGNMENT_NOT_ALLOWED",
+    "message": "A atribuicao so e permitida para pedidos com status 'ready'",
+    "details": []
+  }
+}
+```
+
+**Response 422 (entregador inativo):**
+```json
+{
+  "error": {
+    "code": "DELIVERY_PERSON_INACTIVE",
+    "message": "Nao e possivel atribuir um entregador inativo",
+    "details": []
   }
 }
 ```
@@ -375,7 +415,7 @@ Atribui um entregador a um pedido. **Requer perfil `admin`.**
 ## Entregadores
 
 > Todas as rotas requerem autenticacao.
-> Escrita requer perfil `admin`.
+> Todas as rotas de entregadores requerem perfil `admin`.
 
 ### GET /api/delivery-persons
 
@@ -420,6 +460,19 @@ Atualiza um entregador. **Requer perfil `admin`.**
 
 Remove um entregador. **Requer perfil `admin`.**
 - Nao pode ser removido se estiver atribuido a um pedido com status `delivering`.
+
+**Response 204:** Sem corpo.
+
+**Response 409:**
+```json
+{
+  "error": {
+    "code": "DELIVERY_PERSON_IN_USE",
+    "message": "Nao e possivel remover este entregador porque existe um pedido em andamento vinculado a ele",
+    "details": []
+  }
+}
+```
 
 ---
 
@@ -467,6 +520,11 @@ Executa o algoritmo de otimizacao de atribuicao. **Requer perfil `admin`.**
 }
 ```
 
+**Aplicacao da sugestao no cliente:**
+- aceitar uma sugestao exige `PATCH /api/orders/:id/assign`
+- em seguida, o cliente deve chamar `PATCH /api/orders/:id/status` com `status = delivering`
+- rejeitar uma sugestao nao altera o estado do pedido
+
 ---
 
 ## Relatorios
@@ -479,8 +537,10 @@ Executa o algoritmo de otimizacao de atribuicao. **Requer perfil `admin`.**
 
 | Parametro  | Tipo   | Obrigatorio | Descricao                          |
 | ---------- | ------ | ----------- | ---------------------------------- |
-| `startDate`| string | Sim         | Data inicio no formato `YYYY-MM-DD`|
-| `endDate`  | string | Sim         | Data fim no formato `YYYY-MM-DD`   |
+| `startDate`| string | Nao         | Data inicio no formato `YYYY-MM-DD`|
+| `endDate`  | string | Nao         | Data fim no formato `YYYY-MM-DD`   |
+
+Quando omitidos, os filtros de data consideram todo o periodo disponivel.
 
 **Response 200:**
 ```json
@@ -500,6 +560,13 @@ Executa o algoritmo de otimizacao de atribuicao. **Requer perfil `admin`.**
 ---
 
 ### GET /api/reports/orders-by-status
+
+**Query Parameters:**
+
+| Parametro  | Tipo   | Obrigatorio | Descricao                  |
+| ---------- | ------ | ----------- | -------------------------- |
+| `startDate`| string | Nao         | Data inicio (`YYYY-MM-DD`) |
+| `endDate`  | string | Nao         | Data fim (`YYYY-MM-DD`)    |
 
 **Response 200:**
 ```json
@@ -574,6 +641,8 @@ Executa o algoritmo de otimizacao de atribuicao. **Requer perfil `admin`.**
 }
 ```
 
+O calculo deve usar `orders.delivered_at` e o historico em `order_status_events` para auditoria.
+
 ---
 
 ## Formato Padrao de Erro
@@ -590,6 +659,8 @@ Todas as respostas de erro seguem este formato:
 }
 ```
 
+O campo `details` e obrigatorio em todas as respostas de erro e deve ser um array, mesmo quando vazio.
+
 ### Codigos de erro utilizados
 
 | Codigo HTTP | Codigo de Erro                 | Quando usar                                    |
@@ -604,8 +675,11 @@ Todas as respostas de erro seguem este formato:
 | 404         | `ORDER_NOT_FOUND`              | Pedido nao encontrado                          |
 | 404         | `DELIVERY_PERSON_NOT_FOUND`    | Entregador nao encontrado                      |
 | 409         | `PRODUCT_IN_USE`               | Produto vinculado a pedidos ativos             |
+| 409         | `DELIVERY_PERSON_IN_USE`       | Entregador vinculado a pedido em andamento     |
 | 422         | `INVALID_STATUS_TRANSITION`    | Transicao de status nao permitida              |
 | 422         | `UNAVAILABLE_PRODUCT`          | Produto indisponivel para pedido               |
+| 422         | `DELIVERY_PERSON_INACTIVE`     | Entregador inativo para atribuicao             |
 | 422         | `DELIVERY_PERSON_UNAVAILABLE`  | Entregador ja atribuido a outro pedido         |
+| 422         | `ORDER_ASSIGNMENT_NOT_ALLOWED` | Pedido em status invalido para atribuicao      |
 | 429         | `RATE_LIMIT_EXCEEDED`          | Limite de requisicoes atingido                 |
 | 500         | `INTERNAL_ERROR`               | Erro interno do servidor                       |

@@ -110,6 +110,7 @@ CREATE TABLE orders (
         CHECK (status IN ('pending', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled')),
     total_amount DECIMAL(10, 2) NOT NULL CHECK (total_amount > 0),
     delivery_person_id UUID REFERENCES delivery_persons(id),
+    delivered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -118,9 +119,34 @@ CREATE TABLE orders (
 CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX idx_orders_delivery_person_id ON orders(delivery_person_id);
+CREATE INDEX idx_orders_delivered_at ON orders(delivered_at);
 
 -- Indice composto para relatorios por periodo + status
 CREATE INDEX idx_orders_status_created ON orders(status, created_at);
+```
+
+Observacao: o diagrama acima e simplificado. A referencia normativa para implementacao esta nas tabelas abaixo, incluindo `orders.delivered_at` e `order_status_events`.
+
+---
+
+### order_status_events
+
+Armazena o historico de transicoes de status de cada pedido. Esta tabela e a fonte de auditoria operacional e complementa o campo `delivered_at`.
+
+```sql
+CREATE TABLE order_status_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL
+        CHECK (status IN ('pending', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled')),
+    occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_order_status_events_order_id ON order_status_events(order_id);
+CREATE INDEX idx_order_status_events_status ON order_status_events(status);
+CREATE INDEX idx_order_status_events_occurred_at ON order_status_events(occurred_at);
+CREATE INDEX idx_order_status_events_order_occurred ON order_status_events(order_id, occurred_at);
 ```
 
 ---
@@ -182,6 +208,12 @@ O `unit_price` registra o preco do produto **no momento da criacao do pedido**. 
 - `latitude`: varia de -90 a +90 (DECIMAL(10,8) comporta com 8 casas decimais)
 - `longitude`: varia de -180 a +180 (DECIMAL(11,8) comporta com 8 casas decimais)
 - Para o seed de dados, use coordenadas da regiao de Sao Paulo como referencia
+
+### Sobre `delivered_at` e `order_status_events`
+
+- `orders.delivered_at` deve ser preenchido apenas quando o pedido transita para `delivered`
+- `order_status_events` deve registrar o status inicial do pedido e cada transicao valida subsequente
+- Relatorios de tempo medio de entrega devem usar `delivered_at` para calculo e `order_status_events` para auditoria
 
 ### Sobre o campo `updated_at`
 

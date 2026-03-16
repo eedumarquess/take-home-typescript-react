@@ -74,8 +74,8 @@ react-home-made/
 | Camada     | Tecnologia                                                                 |
 | ---------- | -------------------------------------------------------------------------- |
 | Frontend   | **React 18+** com **TypeScript**                                           |
-| Backend    | **Node.js** com **TypeScript** (Express, Fastify ou Koa — à sua escolha)   |
-| Banco      | **PostgreSQL** ou **MySql** ou **MongoDB** (obrigatório) com ORM/Query Builder à sua escolha se aplicável           |
+| Backend    | **Node.js** com **TypeScript** (framework backend de sua escolha, como NestJS, Express, Fastify ou Koa) |
+| Banco      | **PostgreSQL** (obrigatorio) com ORM/Query Builder a sua escolha           |
 | Testes     | Framework de sua escolha (Jest, Vitest, etc.)                              |
 
 Bibliotecas adicionais são permitidas, mas cada uma deve ser justificada no `DECISIONS.md`.
@@ -94,9 +94,10 @@ O sistema deve ter dois perfis de acesso:
 | **viewer** | Somente leitura: visualizar pedidos, produtos e relatórios                 |
 
 **Regras:**
-- Implementar autenticação via **JWT** (access token + refresh token)
+- Implementar autenticacao via **JWT** com `Authorization: Bearer <accessToken>` para rotas protegidas
 - O access token deve expirar em **15 minutos**
 - O refresh token deve expirar em **7 dias**
+- O refresh token deve ser transportado em cookie `httpOnly`, com rotacao a cada refresh
 - Senhas devem ser armazenadas com **bcrypt** (mínimo 10 salt rounds)
 - Rotas protegidas devem retornar `401` para tokens inválidos/expirados e `403` para permissão insuficiente
 - Implementar middleware de rate limiting: **máximo 100 requisições por minuto por IP**
@@ -129,7 +130,7 @@ Cada produto possui os seguintes campos:
 
 **Regras de negócio:**
 - Não é possível deletar um produto que está vinculado a pedidos com status `pending` ou `preparing`
-- Ao desativar um produto (`isAvailable = false`), ele não deve aparecer nas listagens públicas, mas deve continuar visível no painel admin
+- Ao desativar um produto (`isAvailable = false`), ele deve continuar visivel nas listagens administrativas e nao pode entrar em novos pedidos
 - A listagem deve suportar **paginação**, **busca por nome** e **filtro por categoria e disponibilidade**
 
 ---
@@ -150,6 +151,7 @@ Cada pedido possui os seguintes campos:
 | `status`         | enum       | Ver diagrama de estados abaixo                            |
 | `totalAmount`    | decimal    | Calculado automaticamente pelo backend                    |
 | `deliveryPersonId`| UUID      | Entregador atribuído (pode ser null)                      |
+| `deliveredAt`    | timestamp  | Preenchido quando o pedido transita para `delivered`      |
 | `createdAt`      | timestamp  | Gerado automaticamente                                    |
 | `updatedAt`      | timestamp  | Atualizado automaticamente                                |
 
@@ -184,7 +186,8 @@ Cada pedido possui os seguintes campos:
 **Regras de negócio adicionais:**
 - O `totalAmount` é sempre calculado pelo backend: soma de `(produto.price * item.quantity)` para cada item
 - Não é possível criar um pedido com produtos que tenham `isAvailable = false`
-- A listagem deve suportar **paginação**, **filtro por status** e **ordenação por data de criação**
+- O backend deve registrar historico de status do pedido para auditoria e para calculo de metricas operacionais
+- A listagem deve suportar **paginação**, **filtro por status**, **filtro por periodo (`startDate` e `endDate`)** e **ordenação por data de criação**
 
 ---
 
@@ -237,17 +240,17 @@ Esta tela deve exibir **quatro métricas** calculadas pelo backend:
 | **Receita por período**           | Soma do `totalAmount` dos pedidos `delivered` em um intervalo de datas  |
 | **Pedidos por status**            | Contagem de pedidos agrupados por status                               |
 | **Produtos mais vendidos**        | Top 10 produtos por quantidade vendida (considerar apenas `delivered`)  |
-| **Tempo médio de entrega**        | Média de tempo entre `createdAt` e a transição para `delivered`         |
+| **Tempo médio de entrega**        | Média de tempo entre `createdAt` e `deliveredAt`                         |
 
-- Os relatórios devem aceitar **filtro de período** (data início e data fim)
+- Todos os relatórios devem aceitar **filtro de periodo opcional** (`startDate` e `endDate`)
 - Pelo menos **dois gráficos** devem ser renderizados (bar chart, pie chart, line chart — sua escolha)
 
 #### 5.5 Tela de Atribuição de Entregadores (Algoritmo)
 - Exibir pedidos com status `ready` (aguardando entregador)
 - Exibir lista de entregadores ativos e disponíveis
 - Botão **"Sugerir Atribuição Otimizada"** que aciona o algoritmo descrito na seção 6
-- Exibir o resultado da sugestão com possibilidade de **aceitar ou rejeitar** cada atribuição
-- Após aceitar, o pedido deve transitar para `delivering`
+- Exibir o resultado da sugestao com possibilidade de **aceitar ou rejeitar** cada atribuicao
+- Ao aceitar uma sugestao, o cliente deve executar o fluxo `PATCH /api/orders/:id/assign` seguido de `PATCH /api/orders/:id/status` com `status = delivering`
 
 ---
 
@@ -331,6 +334,8 @@ POST /api/orders/optimize-assignment
   }
 }
 ```
+
+O campo `error.details` e obrigatorio em todas as respostas de erro e deve ser um array, mesmo quando vazio.
 
 - Códigos HTTP devem ser semânticos: `200`, `201`, `400`, `401`, `403`, `404`, `422`, `429`, `500`
 
