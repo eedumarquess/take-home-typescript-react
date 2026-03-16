@@ -43,6 +43,13 @@ type SeedOrder = {
   longitude: number;
   status: 'pending' | 'preparing' | 'ready' | 'delivering' | 'delivered' | 'cancelled';
   deliveryPersonIndex?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  deliveredAt?: string;
+  statusEvents?: Array<{
+    status: 'pending' | 'preparing' | 'ready' | 'delivering' | 'delivered' | 'cancelled';
+    occurredAt: string;
+  }>;
   items: Array<{
     productIndex: number;
     quantity: number;
@@ -93,6 +100,7 @@ async function loadSeedData() {
 }
 
 async function resetDatabase() {
+  await prisma.orderStatusEvent.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.deliveryPerson.deleteMany();
@@ -168,6 +176,23 @@ async function seedOrders(
   createdDeliveryPersons: Array<{ id: string }>,
 ) {
   for (const order of orders) {
+    const statusEvents =
+      order.statusEvents?.map((event) => ({
+        status: orderStatusMap[event.status],
+        occurredAt: new Date(event.occurredAt),
+      })) ?? [];
+
+    const createdAt =
+      order.createdAt === undefined
+        ? (statusEvents[0]?.occurredAt ?? new Date())
+        : new Date(order.createdAt);
+    const deliveredAt =
+      order.deliveredAt === undefined ? null : new Date(order.deliveredAt);
+    const updatedAt =
+      order.updatedAt === undefined
+        ? (deliveredAt ?? statusEvents.at(-1)?.occurredAt ?? createdAt)
+        : new Date(order.updatedAt);
+
     const items = order.items.map((item) => {
       const sourceProduct = products[item.productIndex];
       const createdProduct = createdProducts[item.productIndex];
@@ -200,8 +225,22 @@ async function seedOrders(
         status: orderStatusMap[order.status],
         totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
         deliveryPersonId,
+        deliveredAt,
+        createdAt,
+        updatedAt,
         items: {
           create: items.map(({ total, ...item }) => item),
+        },
+        statusEvents: {
+          create:
+            statusEvents.length > 0
+              ? statusEvents
+              : [
+                  {
+                    status: orderStatusMap[order.status],
+                    occurredAt: createdAt,
+                  },
+                ],
         },
       },
     });

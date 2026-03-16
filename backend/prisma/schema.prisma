@@ -82,25 +82,43 @@ model DeliveryPerson {
 }
 
 model Order {
-  id               String         @id @default(uuid()) @db.Uuid
-  customerName     String         @map("customer_name")
-  customerPhone    String         @map("customer_phone")
-  deliveryAddress  String         @map("delivery_address")
-  latitude         Decimal        @db.Decimal(10, 8)
-  longitude        Decimal        @db.Decimal(11, 8)
-  status           OrderStatus    @default(PENDING)
-  totalAmount      Decimal        @db.Decimal(10, 2) @map("total_amount")
-  deliveryPersonId String?        @db.Uuid @map("delivery_person_id")
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
-  deliveryPerson   DeliveryPerson? @relation(fields: [deliveryPersonId], references: [id])
+  id               String             @id @default(uuid()) @db.Uuid
+  customerName     String             @map("customer_name")
+  customerPhone    String             @map("customer_phone")
+  deliveryAddress  String             @map("delivery_address")
+  latitude         Decimal            @db.Decimal(10, 8)
+  longitude        Decimal            @db.Decimal(11, 8)
+  status           OrderStatus        @default(PENDING)
+  totalAmount      Decimal            @db.Decimal(10, 2) @map("total_amount")
+  deliveryPersonId String?            @db.Uuid @map("delivery_person_id")
+  deliveredAt      DateTime?          @map("delivered_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  deliveryPerson   DeliveryPerson?    @relation(fields: [deliveryPersonId], references: [id])
   items            OrderItem[]
+  statusEvents     OrderStatusEvent[]
 
   @@index([status], map: "idx_orders_status")
   @@index([createdAt(sort: Desc)], map: "idx_orders_created_at")
   @@index([deliveryPersonId], map: "idx_orders_delivery_person_id")
+  @@index([deliveredAt], map: "idx_orders_delivered_at")
   @@index([status, createdAt], map: "idx_orders_status_created")
   @@map("orders")
+}
+
+model OrderStatusEvent {
+  id         String      @id @default(uuid()) @db.Uuid
+  orderId    String      @db.Uuid @map("order_id")
+  status     OrderStatus
+  occurredAt DateTime    @map("occurred_at")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId], map: "idx_order_status_events_order_id")
+  @@index([status], map: "idx_order_status_events_status")
+  @@index([occurredAt], map: "idx_order_status_events_occurred_at")
+  @@index([orderId, occurredAt], map: "idx_order_status_events_order_occurred")
+  @@map("order_status_events")
 }
 
 model OrderItem {

@@ -206,6 +206,11 @@
       "latitude": -23.5891,
       "longitude": -46.6378,
       "status": "pending",
+      "createdAt": "2025-02-05T12:00:00.000Z",
+      "updatedAt": "2025-02-05T12:00:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-05T12:00:00.000Z" }
+      ],
       "items": [{ "productIndex": 0, "quantity": 2 }, { "productIndex": 5, "quantity": 1 }]
     },
     {
@@ -215,6 +220,12 @@
       "latitude": -23.5632,
       "longitude": -46.6542,
       "status": "preparing",
+      "createdAt": "2025-02-05T12:30:00.000Z",
+      "updatedAt": "2025-02-05T12:42:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-05T12:30:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-05T12:42:00.000Z" }
+      ],
       "items": [
         { "productIndex": 2, "quantity": 1 },
         { "productIndex": 6, "quantity": 2 },
@@ -228,6 +239,13 @@
       "latitude": -23.5538,
       "longitude": -46.658,
       "status": "ready",
+      "createdAt": "2025-02-05T13:00:00.000Z",
+      "updatedAt": "2025-02-05T13:21:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-05T13:00:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-05T13:09:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-02-05T13:21:00.000Z" }
+      ],
       "items": [
         { "productIndex": 1, "quantity": 1 },
         { "productIndex": 7, "quantity": 1 },
@@ -241,6 +259,13 @@
       "latitude": -23.5618,
       "longitude": -46.6712,
       "status": "ready",
+      "createdAt": "2025-02-05T13:20:00.000Z",
+      "updatedAt": "2025-02-05T13:38:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-05T13:20:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-05T13:27:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-02-05T13:38:00.000Z" }
+      ],
       "items": [{ "productIndex": 3, "quantity": 1 }, { "productIndex": 8, "quantity": 1 }]
     },
     {
@@ -250,6 +275,14 @@
       "latitude": -23.557,
       "longitude": -46.665,
       "status": "delivering",
+      "createdAt": "2025-02-05T11:15:00.000Z",
+      "updatedAt": "2025-02-05T12:02:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-05T11:15:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-05T11:28:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-02-05T11:43:00.000Z" },
+        { "status": "delivering", "occurredAt": "2025-02-05T12:02:00.000Z" }
+      ],
       "deliveryPersonIndex": 0,
       "items": [
         { "productIndex": 0, "quantity": 1 },
@@ -264,6 +297,16 @@
       "latitude": -23.551,
       "longitude": -46.656,
       "status": "delivered",
+      "createdAt": "2025-02-03T18:10:00.000Z",
+      "updatedAt": "2025-02-03T19:02:00.000Z",
+      "deliveredAt": "2025-02-03T19:02:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-03T18:10:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-03T18:20:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-02-03T18:34:00.000Z" },
+        { "status": "delivering", "occurredAt": "2025-02-03T18:43:00.000Z" },
+        { "status": "delivered", "occurredAt": "2025-02-03T19:02:00.000Z" }
+      ],
       "deliveryPersonIndex": 1,
       "items": [
         { "productIndex": 2, "quantity": 2 },
@@ -278,6 +321,16 @@
       "latitude": -23.566,
       "longitude": -46.643,
       "status": "delivered",
+      "createdAt": "2025-02-02T20:00:00.000Z",
+      "updatedAt": "2025-02-02T20:48:00.000Z",
+      "deliveredAt": "2025-02-02T20:48:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-02T20:00:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-02T20:08:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-02-02T20:22:00.000Z" },
+        { "status": "delivering", "occurredAt": "2025-02-02T20:31:00.000Z" },
+        { "status": "delivered", "occurredAt": "2025-02-02T20:48:00.000Z" }
+      ],
       "deliveryPersonIndex": 2,
       "items": [
         { "productIndex": 1, "quantity": 1 },
@@ -292,6 +345,12 @@
       "latitude": -23.588,
       "longitude": -46.636,
       "status": "cancelled",
+      "createdAt": "2025-02-04T21:20:00.000Z",
+      "updatedAt": "2025-02-04T21:31:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-04T21:20:00.000Z" },
+        { "status": "cancelled", "occurredAt": "2025-02-04T21:31:00.000Z" }
+      ],
       "items": [{ "productIndex": 0, "quantity": 3 }, { "productIndex": 8, "quantity": 2 }]
     },
     {
@@ -301,6 +360,16 @@
       "latitude": -23.5685,
       "longitude": -46.651,
       "status": "delivered",
+      "createdAt": "2025-02-01T19:05:00.000Z",
+      "updatedAt": "2025-02-01T20:01:00.000Z",
+      "deliveredAt": "2025-02-01T20:01:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-01T19:05:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-01T19:18:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-02-01T19:34:00.000Z" },
+        { "status": "delivering", "occurredAt": "2025-02-01T19:45:00.000Z" },
+        { "status": "delivered", "occurredAt": "2025-02-01T20:01:00.000Z" }
+      ],
       "deliveryPersonIndex": 3,
       "items": [
         { "productIndex": 3, "quantity": 2 },
@@ -315,6 +384,11 @@
       "latitude": -23.565,
       "longitude": -46.679,
       "status": "pending",
+      "createdAt": "2025-02-05T13:50:00.000Z",
+      "updatedAt": "2025-02-05T13:50:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-05T13:50:00.000Z" }
+      ],
       "items": [
         { "productIndex": 0, "quantity": 1 },
         { "productIndex": 10, "quantity": 1 },
@@ -328,6 +402,13 @@
       "latitude": -23.558,
       "longitude": -46.662,
       "status": "ready",
+      "createdAt": "2025-02-05T14:05:00.000Z",
+      "updatedAt": "2025-02-05T14:24:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-02-05T14:05:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-02-05T14:13:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-02-05T14:24:00.000Z" }
+      ],
       "items": [
         { "productIndex": 2, "quantity": 1 },
         { "productIndex": 13, "quantity": 1 },
@@ -341,6 +422,16 @@
       "latitude": -23.553,
       "longitude": -46.653,
       "status": "delivered",
+      "createdAt": "2025-01-31T18:30:00.000Z",
+      "updatedAt": "2025-01-31T19:20:00.000Z",
+      "deliveredAt": "2025-01-31T19:20:00.000Z",
+      "statusEvents": [
+        { "status": "pending", "occurredAt": "2025-01-31T18:30:00.000Z" },
+        { "status": "preparing", "occurredAt": "2025-01-31T18:39:00.000Z" },
+        { "status": "ready", "occurredAt": "2025-01-31T18:51:00.000Z" },
+        { "status": "delivering", "occurredAt": "2025-01-31T19:01:00.000Z" },
+        { "status": "delivered", "occurredAt": "2025-01-31T19:20:00.000Z" }
+      ],
       "deliveryPersonIndex": 5,
       "items": [
         { "productIndex": 1, "quantity": 2 },
