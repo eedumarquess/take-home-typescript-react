@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN  @map("admin")
+  VIEWER @map("viewer")
+}
+
+enum ProductCategory {
+  MEAL     @map("meal")
+  DRINK    @map("drink")
+  DESSERT  @map("dessert")
+  SIDE     @map("side")
+}
+
+enum OrderStatus {
+  PENDING    @map("pending")
+  PREPARING  @map("preparing")
+  READY      @map("ready")
+  DELIVERING @map("delivering")
+  DELIVERED  @map("delivered")
+  CANCELLED  @map("cancelled")
+}
+
+enum VehicleType {
+  BICYCLE    @map("bicycle")
+  MOTORCYCLE @map("motorcycle")
+  CAR        @map("car")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  password  String
+  role      UserRole
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([email], map: "idx_users_email")
+  @@map("users")
+}
+
+model Product {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String
+  description     String
+  price           Decimal          @db.Decimal(10, 2)
+  category        ProductCategory
+  imageUrl        String?          @map("image_url")
+  isAvailable     Boolean          @default(true) @map("is_available")
+  preparationTime Int              @map("preparation_time")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  orderItems      OrderItem[]
+
+  @@index([category], map: "idx_products_category")
+  @@index([isAvailable], map: "idx_products_is_available")
+  @@index([name], map: "idx_products_name")
+  @@index([createdAt(sort: Desc)], map: "idx_products_created_at")
+  @@map("products")
+}
+
+model DeliveryPerson {
+  id               String      @id @default(uuid()) @db.Uuid
+  name             String
+  phone            String
+  vehicleType      VehicleType @map("vehicle_type")
+  isActive         Boolean     @default(true) @map("is_active")
+  currentLatitude  Decimal?    @db.Decimal(10, 8) @map("current_latitude")
+  currentLongitude Decimal?    @db.Decimal(11, 8) @map("current_longitude")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  orders           Order[]
+
+  @@index([isActive], map: "idx_delivery_persons_is_active")
+  @@map("delivery_persons")
+}
+
+model Order {
+  id               String         @id @default(uuid()) @db.Uuid
+  customerName     String         @map("customer_name")
+  customerPhone    String         @map("customer_phone")
+  deliveryAddress  String         @map("delivery_address")
+  latitude         Decimal        @db.Decimal(10, 8)
+  longitude        Decimal        @db.Decimal(11, 8)
+  status           OrderStatus    @default(PENDING)
+  totalAmount      Decimal        @db.Decimal(10, 2) @map("total_amount")
+  deliveryPersonId String?        @db.Uuid @map("delivery_person_id")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  deliveryPerson   DeliveryPerson? @relation(fields: [deliveryPersonId], references: [id])
+  items            OrderItem[]
+
+  @@index([status], map: "idx_orders_status")
+  @@index([createdAt(sort: Desc)], map: "idx_orders_created_at")
+  @@index([deliveryPersonId], map: "idx_orders_delivery_person_id")
+  @@index([status, createdAt], map: "idx_orders_status_created")
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  orderId   String   @db.Uuid @map("order_id")
+  productId String   @db.Uuid @map("product_id")
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2) @map("unit_price")
+  createdAt DateTime @default(now()) @map("created_at")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([orderId], map: "idx_order_items_order_id")
+  @@index([productId], map: "idx_order_items_product_id")
+  @@map("order_items")
+}
