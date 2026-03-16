@@ -6,6 +6,7 @@ Monorepo TypeScript com:
 - `backend/`: NestJS + Prisma
 - `seed/`: dados iniciais do desafio
 - `docs/`: especificacoes e material de apoio
+- `DECISIONS.md`: decisoes arquiteturais correntes do projeto
 
 O repositório está preparado para desenvolvimento local, lint/format com Biome e integração com PostgreSQL via Prisma.
 
@@ -20,6 +21,7 @@ Já configurado:
 - Prisma com schema PostgreSQL
 - Seed a partir de `seed/data.json`
 - Biome como ferramenta principal de lint e format
+- contrato de autenticacao com access token Bearer + refresh token rotativo em cookie `httpOnly`
 - Scripts de workspace no root
 
 ## Requisitos
