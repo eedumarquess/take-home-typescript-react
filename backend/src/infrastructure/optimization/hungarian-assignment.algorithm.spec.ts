@@ -9,11 +9,13 @@ describe('HungarianAssignmentAlgorithm', () => {
       [
         {
           coordinates: new Coordinates(-23.55055, -46.63331),
+          createdAt: new Date('2025-01-01T12:00:00.000Z'),
           deliveryAddress: 'Rua Augusta, 10',
           id: 'order-1',
         },
         {
           coordinates: new Coordinates(-23.56141, -46.65657),
+          createdAt: new Date('2025-01-01T12:05:00.000Z'),
           deliveryAddress: 'Av. Paulista, 1000',
           id: 'order-2',
         },
@@ -56,11 +58,13 @@ describe('HungarianAssignmentAlgorithm', () => {
       [
         {
           coordinates: new Coordinates(-23.5505, -46.6333),
+          createdAt: new Date('2025-01-01T12:00:00.000Z'),
           deliveryAddress: 'Rua das Flores, 123',
           id: 'order-1',
         },
         {
           coordinates: new Coordinates(-23.553, -46.631),
+          createdAt: new Date('2025-01-01T12:05:00.000Z'),
           deliveryAddress: 'Av. Brasil, 200',
           id: 'order-2',
         },
