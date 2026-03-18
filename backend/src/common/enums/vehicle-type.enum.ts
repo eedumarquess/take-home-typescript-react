@@ -1,5 +1,1 @@
-export enum VehicleTypeValue {
-  BICYCLE = 'bicycle',
-  MOTORCYCLE = 'motorcycle',
-  CAR = 'car',
-}
+export { VehicleTypeValue } from '../../domain/delivery-persons/vehicle-type.enum';

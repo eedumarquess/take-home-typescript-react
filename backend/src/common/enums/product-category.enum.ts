@@ -1,6 +1,1 @@
-export enum ProductCategoryValue {
-  MEAL = 'meal',
-  DRINK = 'drink',
-  DESSERT = 'dessert',
-  SIDE = 'side',
-}
+export { ProductCategoryValue } from '../../domain/products/product-category.enum';
