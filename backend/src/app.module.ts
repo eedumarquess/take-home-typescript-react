@@ -1,20 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { AuthModule } from './auth/auth.module';
 import { validateEnvironment } from './common/config/env.validation';
 import { AppExceptionFilter } from './common/filters/app-exception.filter';
 import { AccessTokenGuard } from './common/guards/access-token.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { RolesGuard } from './common/guards/roles.guard';
-import { DeliveryPersonsModule } from './delivery-persons/delivery-persons.module';
 import { HealthModule } from './health/health.module';
-import { OptimizationModule } from './optimization/optimization.module';
-import { OrdersModule } from './orders/orders.module';
+import { AuthModule } from './presentation/modules/auth.module';
+import { DeliveryPersonsModule } from './presentation/modules/delivery-persons.module';
+import { OrdersModule } from './presentation/modules/orders.module';
+import { ProductsModule } from './presentation/modules/products.module';
+import { ReportsModule } from './presentation/modules/reports.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { ProductsModule } from './products/products.module';
-import { ReportsModule } from './reports/reports.module';
-import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -26,12 +24,10 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     HealthModule,
     AuthModule,
-    UsersModule,
     ProductsModule,
     OrdersModule,
     DeliveryPersonsModule,
     ReportsModule,
-    OptimizationModule,
   ],
   providers: [
     {
