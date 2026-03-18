@@ -31,6 +31,8 @@
 - Prisma CLI configuration: seed/runtime CLI settings live in `backend/prisma.config.ts` instead of `package.json#prisma`, to stay aligned with the Prisma 7 migration path and remove current deprecation warnings.
 - Refresh-token cookie scope: the cookie path is `/api/auth`, not `/api/auth/refresh`, so the same cookie can be used for both refresh rotation and server-side logout revocation.
 - Sprint 02 security verification strategy: RBAC/auth/rate-limit HTTP coverage can use technical probe endpoints registered only in the e2e harness, avoiding premature public controllers before the domain sprints.
+- Sprint 03 delivery-person coordinates: `currentLatitude` and `currentLongitude` are accepted only as a pair. Partial location updates are rejected as validation errors because a single coordinate is not operationally useful.
+- Sprint 03 delivery-person availability filter: `GET /api/delivery-persons?available=false` is supported as the inverse of `available=true`, returning only couriers currently tied to `delivering` orders. This extends the required contract without breaking it.
 
 ## Historical Note
 
