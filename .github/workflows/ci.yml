@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fastmeals
+          POSTGRES_USER: fastmeals
+          POSTGRES_PASSWORD: fastmeals123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fastmeals -d fastmeals"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create CI environment file
+        run: |
+          cat <<'EOF' > .env
+          DATABASE_URL=postgresql://fastmeals:fastmeals123@localhost:5432/fastmeals
+          JWT_SECRET=ci-fastmeals-access-secret
+          JWT_REFRESH_SECRET=ci-fastmeals-refresh-secret
+          JWT_EXPIRES_IN=15m
+          JWT_REFRESH_EXPIRES_IN=7d
+          PORT=3001
+          NODE_ENV=test
+          FRONTEND_URL=http://localhost:3000
+          THROTTLE_TTL_SECONDS=60
+          THROTTLE_LIMIT=100
+          COOKIE_SECURE=false
+          VITE_API_URL=http://localhost:3001/api
+          EOF
+
+      - name: Apply Prisma migrations
+        run: npm run db:migrate:deploy --workspace backend
+
+      - name: Seed database
+        run: npm run seed --workspace backend
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Frontend tests
+        run: npm run test:frontend
+
+      - name: Backend unit tests
+        run: npm run test:backend
+
+      - name: Backend e2e tests
+        run: npm run test:e2e:backend
