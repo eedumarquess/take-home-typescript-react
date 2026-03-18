@@ -25,7 +25,7 @@
   - products: reusable pagination DTO plus `search`, `category`, `isAvailable`, `sortBy`, `sortOrder`
   - orders: reusable pagination DTO plus `status`, `startDate`, `endDate`, `sortBy`, `sortOrder`
   - reports: reusable date-range DTO for analytics endpoints
-- Local environment strategy: `docker-compose.yml` provisions PostgreSQL only; frontend and backend continue to run from the host with workspace scripts for faster iteration.
+- Local environment strategy: the repository keeps the fast host-based workflow with workspace scripts, but the delivery artifact now also ships a full `docker compose up --build` path for `postgres + init + backend + frontend`.
 - Frontend testing stack: Vitest + Testing Library.
 - Backend testing strategy: Jest unit tests for services/guards plus Jest e2e tests for HTTP contracts that can run without a live database by overriding `PrismaService`.
 - Prisma CLI configuration: seed/runtime CLI settings live in `backend/prisma.config.ts` instead of `package.json#prisma`, to stay aligned with the Prisma 7 migration path and remove current deprecation warnings.
@@ -43,6 +43,9 @@
   - revenue, top-products and average-delivery-time are filtered by `deliveredAt` and only consider delivered orders
   - orders-by-status is filtered by `createdAt`, because it represents the distribution of persisted order states within the created-order period
 - Sprint 05 reports implementation tradeoff: analytics are aggregated in the service layer from focused Prisma reads instead of raw SQL. This keeps the take-home easier to audit and test while still leveraging the required status/date indexes already present in the schema.
+- Sprint 06 line endings policy: `.gitattributes` enforces LF for source and docs, while keeping Windows-native endings only for shell scripts that need them. This removes recurring Biome noise across environments.
+- Sprint 06 container packaging: Docker delivery uses three runtime services plus one one-shot init job. `backend-init` runs `prisma db push` and `seed`, `backend` exposes the NestJS API, and `frontend` serves the Vite build through Nginx.
+- Sprint 06 frontend delivery: the SPA is published behind an Nginx fallback so deep links from React Router keep working in the containerized runtime.
 
 ## Historical Note
 
