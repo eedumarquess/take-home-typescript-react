@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { createMemoryRouter, Outlet, type RouteObject, RouterProvider } from 'react-router-dom';
 import {
@@ -13,13 +14,21 @@ type RenderWithAuthOptions = {
 
 export function renderWithAuthRouter(routes: RouteObject[], options: RenderWithAuthOptions = {}) {
   const authValue = createAuthContextValue(options.auth);
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      mutations: { retry: false },
+      queries: { retry: false },
+    },
+  });
   const router = createMemoryRouter(
     [
       {
         element: (
-          <AuthContext.Provider value={authValue}>
-            <Outlet />
-          </AuthContext.Provider>
+          <QueryClientProvider client={queryClient}>
+            <AuthContext.Provider value={authValue}>
+              <Outlet />
+            </AuthContext.Provider>
+          </QueryClientProvider>
         ),
         children: routes,
       },
@@ -32,6 +41,7 @@ export function renderWithAuthRouter(routes: RouteObject[], options: RenderWithA
   return {
     ...render(<RouterProvider router={router} />),
     authValue,
+    queryClient,
     router,
   };
 }
