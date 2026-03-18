@@ -29,6 +29,8 @@
 - Frontend testing stack: Vitest + Testing Library.
 - Backend testing strategy: Jest unit tests for services/guards plus Jest e2e tests for HTTP contracts that can run without a live database by overriding `PrismaService`.
 - Prisma CLI configuration: seed/runtime CLI settings live in `backend/prisma.config.ts` instead of `package.json#prisma`, to stay aligned with the Prisma 7 migration path and remove current deprecation warnings.
+- Refresh-token cookie scope: the cookie path is `/api/auth`, not `/api/auth/refresh`, so the same cookie can be used for both refresh rotation and server-side logout revocation.
+- Sprint 02 security verification strategy: RBAC/auth/rate-limit HTTP coverage can use technical probe endpoints registered only in the e2e harness, avoiding premature public controllers before the domain sprints.
 
 ## Historical Note
 

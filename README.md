@@ -10,15 +10,16 @@ Monorepo TypeScript do painel administrativo FastMeals.
 
 ## Estado do projeto
 
-O Sprint 01 foi implementado com foco em fundacao e arquitetura:
+Os Sprints 01 e 02 estao implementados com foco em fundacao, autenticacao e seguranca:
 
 - backend modularizado por dominio
 - health check com validacao de conexao Prisma
 - validacao global estrita e contrato unico de erro
 - auth base com `login`, `refresh`, `logout`, access token Bearer e refresh token em cookie `httpOnly` com rotacao stateful
 - rate limiting global `100 req/min` por IP
+- contratos padronizados de `401`, `403` e `429` com guards globais
 - frontend com shell autenticado, shell publico, roteamento e placeholders por modulo
-- testes base para backend e frontend
+- cobertura de testes para login, refresh rotativo, logout, guards e expiracao de sessao no cliente
 
 ## Requisitos
 
@@ -150,6 +151,7 @@ npm run test
 ## Observacoes
 
 - O frontend mantem o access token apenas em memoria e usa `POST /api/auth/refresh` para restaurar sessao.
+- Refresh tokens usam cookie `httpOnly` com `Path=/api/auth`, permitindo refresh e logout no mesmo escopo.
 - Refresh tokens sao rotacionados com persistencia server-side em PostgreSQL para invalidar reuse de cookies antigos.
 - O backend falha cedo se o Prisma nao conseguir conectar ao banco durante a inicializacao.
 - O rate limit desta sprint usa armazenamento em memoria, adequado para desenvolvimento local e para o escopo do take-home.
@@ -162,3 +164,4 @@ npm run test
 - `docs/database-schema.md`
 - `docs/evaluation-criteria.md`
 - `docs/scrum-plan/sprint-01-foundation-and-architecture.md`
+- `docs/scrum-plan/sprint-02-auth-and-security.md`
