@@ -19,6 +19,8 @@ export type RevenueReport = {
 };
 
 export type OrdersByStatusReport = {
+  startDate?: string | null;
+  endDate?: string | null;
   data: Array<{
     status: OrderStatus;
     count: number;
@@ -36,6 +38,8 @@ export type TopProductsReport = {
 };
 
 export type AverageDeliveryTimeReport = {
+  startDate?: string | null;
+  endDate?: string | null;
   averageMinutes: number;
   fastestMinutes: number;
   slowestMinutes: number;
