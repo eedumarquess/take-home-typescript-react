@@ -17,5 +17,90 @@ services:
     volumes:
       - fastmeals-postgres-data:/var/lib/postgresql/data
 
+  backend-init:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: tooling
+    environment:
+      DATABASE_URL: postgresql://fastmeals:fastmeals123@postgres:5432/fastmeals
+      JWT_SECRET: docker-fastmeals-access-secret
+      JWT_REFRESH_SECRET: docker-fastmeals-refresh-secret
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      PORT: 3001
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:3000
+      THROTTLE_TTL_SECONDS: 60
+      THROTTLE_LIMIT: 100
+      COOKIE_SECURE: 'false'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      [
+        'sh',
+        '-c',
+        'npx prisma db push --schema backend/prisma/schema.prisma && npx ts-node backend/prisma/seed.ts',
+      ]
+    restart: 'no'
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    container_name: fastmeals-backend
+    environment:
+      DATABASE_URL: postgresql://fastmeals:fastmeals123@postgres:5432/fastmeals
+      JWT_SECRET: docker-fastmeals-access-secret
+      JWT_REFRESH_SECRET: docker-fastmeals-refresh-secret
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      PORT: 3001
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:3000
+      THROTTLE_TTL_SECONDS: 60
+      THROTTLE_LIMIT: 100
+      COOKIE_SECURE: 'false'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend-init:
+        condition: service_completed_successfully
+    ports:
+      - '3001:3001'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3001/api
+    container_name: fastmeals-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '3000:80'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/ >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
 volumes:
   fastmeals-postgres-data:
