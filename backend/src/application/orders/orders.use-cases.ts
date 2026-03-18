@@ -3,7 +3,6 @@ import { AppException } from '../../common/errors/app.exception';
 import { AppErrorCode } from '../../common/errors/app-error-code.enum';
 import { DeliveryPerson } from '../../domain/delivery-persons/delivery-person';
 import type { VehicleTypeValue } from '../../domain/delivery-persons/vehicle-type.enum';
-import { Order } from '../../domain/orders/order';
 import type { IOrderRepository, ListOrdersQuery } from '../../domain/orders/order.repository';
 import { OrderStatusValue } from '../../domain/orders/order-status.enum';
 import { Coordinates } from '../../domain/shared/coordinates';
@@ -60,88 +59,14 @@ export class CreateOrderUseCase {
     longitude: number;
     items: Array<{ productId: string; quantity: number }>;
   }) {
-    const requestedProductIds = input.items.map((item) => item.productId);
-    const products = await this.ordersRepository.findProductsByIds(requestedProductIds);
-    const productsById = new Map(products.map((product) => [product.toPrimitives().id, product]));
-    const unavailableProducts: Array<{
-      productId: string;
-      productName: string | null;
-      reason: string;
-    }> = [];
+    assertNoDuplicateProducts(input.items);
 
-    for (const productId of requestedProductIds) {
-      const product = productsById.get(productId);
-
-      if (!product) {
-        unavailableProducts.push({
-          productId,
-          productName: null,
-          reason: 'Produto nao encontrado',
-        });
-        continue;
-      }
-
-      if (!product.toPrimitives().isAvailable) {
-        unavailableProducts.push({
-          productId,
-          productName: product.toPrimitives().name,
-          reason: 'Produto indisponivel',
-        });
-      }
-    }
-
-    if (unavailableProducts.length > 0) {
-      throw new AppException(
-        422,
-        AppErrorCode.UNAVAILABLE_PRODUCT,
-        'Um ou mais produtos nao estao disponiveis',
-        unavailableProducts,
-      );
-    }
-
-    const order = Order.create({
+    const createdOrder = await this.ordersRepository.create({
       coordinates: new Coordinates(input.latitude, input.longitude),
       customerName: input.customerName,
       customerPhone: input.customerPhone,
       deliveryAddress: input.deliveryAddress,
-      items: input.items.map((item) => {
-        const product = productsById.get(item.productId);
-
-        if (!product) {
-          throw new AppException(
-            422,
-            AppErrorCode.UNAVAILABLE_PRODUCT,
-            'Um ou mais produtos nao estao disponiveis',
-            [
-              {
-                productId: item.productId,
-                productName: null,
-                reason: 'Produto nao encontrado',
-              },
-            ],
-          );
-        }
-
-        return {
-          productId: item.productId,
-          productName: product.toPrimitives().name,
-          quantity: item.quantity,
-          unitPrice: product.toPrimitives().price,
-        };
-      }),
-    });
-
-    const createdOrder = await this.ordersRepository.create({
-      coordinates: order.toPrimitives().coordinates,
-      customerName: order.toPrimitives().customerName,
-      customerPhone: order.toPrimitives().customerPhone,
-      deliveryAddress: order.toPrimitives().deliveryAddress,
-      items: order.toPrimitives().items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-      })),
-      totalAmount: order.toPrimitives().totalAmount,
+      items: input.items,
     });
 
     return toOrderResponse(createdOrder);
@@ -160,12 +85,15 @@ export class TransitionOrderUseCase {
     }
 
     try {
-      const transitionedOrder = order.transitionTo(input.status);
-      const updatedOrder = await this.ordersRepository.updateStatus(
+      const occurredAt = new Date();
+      const transitionedOrder = order.transitionTo(input.status, occurredAt);
+      const updatedOrder = await this.ordersRepository.updateStatus({
+        deliveredAt: transitionedOrder.toPrimitives().deliveredAt,
+        expectedUpdatedAt: order.toPrimitives().updatedAt,
         id,
-        transitionedOrder.toPrimitives().status,
-        transitionedOrder.toPrimitives().deliveredAt,
-      );
+        occurredAt,
+        status: transitionedOrder.toPrimitives().status,
+      });
 
       return toOrderResponse(updatedOrder);
     } catch (error) {
@@ -237,14 +165,44 @@ export class AssignDeliveryUseCase {
       throw error;
     }
 
-    const updatedOrder = await this.ordersRepository.assignDeliveryPerson(
-      id,
-      input.deliveryPersonId,
-    );
+    const updatedOrder = await this.ordersRepository.assignDeliveryPerson({
+      deliveryPersonId: input.deliveryPersonId,
+      expectedUpdatedAt: order.toPrimitives().updatedAt,
+      orderId: id,
+    });
+
     return toOrderResponse(updatedOrder);
   }
 }
 
 function orderNotFound() {
   return new AppException(404, AppErrorCode.ORDER_NOT_FOUND, 'Pedido nao encontrado', []);
+}
+
+function assertNoDuplicateProducts(items: Array<{ productId: string }>) {
+  const seenProductIds = new Set<string>();
+  const duplicatedProductIds = new Set<string>();
+
+  for (const item of items) {
+    if (seenProductIds.has(item.productId)) {
+      duplicatedProductIds.add(item.productId);
+    }
+
+    seenProductIds.add(item.productId);
+  }
+
+  if (duplicatedProductIds.size === 0) {
+    return;
+  }
+
+  throw new AppException(
+    422,
+    AppErrorCode.VALIDATION_ERROR,
+    'Dados invalidos',
+    [...duplicatedProductIds].map((productId) => ({
+      field: 'items',
+      message: 'Nao e permitido repetir produtos no mesmo pedido',
+      productId,
+    })),
+  );
 }

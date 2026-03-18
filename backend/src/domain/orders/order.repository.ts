@@ -1,7 +1,6 @@
 import { SortOrder } from '../../common/enums/sort-order.enum';
 import type { Product } from '../products/product';
 import type { Coordinates } from '../shared/coordinates';
-import type { Money } from '../shared/money';
 import type { Order } from './order';
 import type { OrderStatusValue } from './order-status.enum';
 
@@ -19,13 +18,11 @@ export type CreateOrderInput = {
   customerName: string;
   customerPhone: string;
   deliveryAddress: string;
-  coordinates: Coordinates;
-  totalAmount: Money;
   items: Array<{
     productId: string;
     quantity: number;
-    unitPrice: Money;
   }>;
+  coordinates: Coordinates;
 };
 
 export type DeliveryPersonAvailability = {
@@ -41,6 +38,7 @@ export type OptimizationOrderCandidate = {
   id: string;
   deliveryAddress: string;
   coordinates: Coordinates;
+  createdAt: Date;
 };
 
 export interface IOrderRepository {
@@ -50,7 +48,17 @@ export interface IOrderRepository {
   findProductsByIds(productIds: string[]): Promise<Product[]>;
   findDeliveryPersonAvailabilityById(id: string): Promise<DeliveryPersonAvailability | null>;
   create(input: CreateOrderInput): Promise<Order>;
-  updateStatus(id: string, status: OrderStatusValue, deliveredAt: Date | null): Promise<Order>;
-  assignDeliveryPerson(orderId: string, deliveryPersonId: string): Promise<Order>;
+  updateStatus(input: {
+    id: string;
+    expectedUpdatedAt: Date;
+    status: OrderStatusValue;
+    deliveredAt: Date | null;
+    occurredAt: Date;
+  }): Promise<Order>;
+  assignDeliveryPerson(input: {
+    orderId: string;
+    deliveryPersonId: string;
+    expectedUpdatedAt: Date;
+  }): Promise<Order>;
   findReadyOrders(): Promise<OptimizationOrderCandidate[]>;
 }
