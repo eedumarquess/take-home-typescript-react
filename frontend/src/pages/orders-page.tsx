@@ -7,9 +7,16 @@ import {
   createOrder,
   getOrder,
   listOrders,
+  optimizeAssignment,
   updateOrderStatus,
 } from '../features/orders/api';
-import type { CreateOrderInput, Order, OrderStatus } from '../features/orders/types';
+import type {
+  CreateOrderInput,
+  OptimizationAssignment,
+  OptimizationResult,
+  Order,
+  OrderStatus,
+} from '../features/orders/types';
 import { listProducts } from '../features/products/api';
 import type { Product } from '../features/products/types';
 import { ApiError } from '../services/api';
@@ -93,6 +100,7 @@ export function OrdersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
   const [selectedDeliveryPersonId, setSelectedDeliveryPersonId] = useState('');
+  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
   const [pagination, setPagination] = useState({
     limit: 20,
     page: 1,
@@ -105,7 +113,10 @@ export function OrdersPage() {
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [isDeliveryPersonsLoading, setIsDeliveryPersonsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOptimizationLoading, setIsOptimizationLoading] = useState(false);
+  const [isApplyingSuggestion, setIsApplyingSuggestion] = useState<string | 'all' | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  const [optimizationError, setOptimizationError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
 
   useEffect(() => {
@@ -257,6 +268,8 @@ export function OrdersPage() {
       setSelectedOrderId(createdOrder.id);
       setSelectedOrder(createdOrder);
       setDraft(emptyDraft);
+      setOptimizationError(null);
+      setOptimizationResult(null);
       setFeedback({
         text: 'Pedido criado com sucesso.',
         tone: 'success',
@@ -286,6 +299,8 @@ export function OrdersPage() {
     try {
       const updatedOrder = await updateOrderStatus(selectedOrderId, status);
       setSelectedOrder(updatedOrder);
+      setOptimizationError(null);
+      setOptimizationResult(null);
       setFeedback({
         text: `Pedido atualizado para ${statusLabel[status]}.`,
         tone: 'success',
@@ -316,6 +331,8 @@ export function OrdersPage() {
     try {
       const updatedOrder = await assignDeliveryPerson(selectedOrderId, selectedDeliveryPersonId);
       setSelectedOrder(updatedOrder);
+      setOptimizationError(null);
+      setOptimizationResult(null);
       setFeedback({
         text: 'Entregador atribuido com sucesso.',
         tone: 'success',
@@ -329,6 +346,108 @@ export function OrdersPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleLoadOptimization() {
+    setIsOptimizationLoading(true);
+    setOptimizationError(null);
+
+    try {
+      const result = await optimizeAssignment();
+      setOptimizationResult(result);
+    } catch (error) {
+      setOptimizationResult(null);
+      setOptimizationError(
+        toOrderErrorMessage(error, 'Nao foi possivel carregar a sugestao otimizada.'),
+      );
+    } finally {
+      setIsOptimizationLoading(false);
+    }
+  }
+
+  async function handleApplySuggestion(suggestion: OptimizationAssignment) {
+    setIsApplyingSuggestion(suggestion.orderId);
+    setOptimizationError(null);
+
+    try {
+      const updatedOrder = await applyOptimizationSuggestion(suggestion);
+      setFeedback({
+        text: `Sugestao aplicada para ${updatedOrder.customerName}.`,
+        tone: 'success',
+      });
+      setRefreshNonce((current) => current + 1);
+    } catch (error) {
+      const message = toOrderErrorMessage(error, 'Nao foi possivel aplicar a sugestao otimizada.');
+
+      setOptimizationError(message);
+      setFeedback({
+        text: message,
+        tone: 'error',
+      });
+    } finally {
+      setIsApplyingSuggestion(null);
+    }
+  }
+
+  async function handleApplyAllSuggestions() {
+    if (!optimizationResult || optimizationResult.assignments.length === 0) {
+      return;
+    }
+
+    const suggestions = [...optimizationResult.assignments];
+    let successCount = 0;
+    const failures: string[] = [];
+
+    setIsApplyingSuggestion('all');
+    setOptimizationError(null);
+
+    for (const suggestion of suggestions) {
+      try {
+        await applyOptimizationSuggestion(suggestion);
+        successCount += 1;
+      } catch (error) {
+        failures.push(
+          `${suggestion.deliveryPersonName}: ${toOrderErrorMessage(
+            error,
+            'Falha ao aplicar sugestao.',
+          )}`,
+        );
+      }
+    }
+
+    if (successCount > 0) {
+      setRefreshNonce((current) => current + 1);
+    }
+
+    if (failures.length === 0) {
+      setFeedback({
+        text: `${successCount} sugestoes aplicadas com sucesso.`,
+        tone: 'success',
+      });
+    } else {
+      const message = `Aplicadas ${successCount} sugestoes. Pendencias: ${failures.join(' | ')}`;
+      setOptimizationError(message);
+      setFeedback({
+        text: message,
+        tone: 'error',
+      });
+    }
+
+    setIsApplyingSuggestion(null);
+  }
+
+  async function applyOptimizationSuggestion(suggestion: OptimizationAssignment) {
+    await assignDeliveryPerson(suggestion.orderId, suggestion.deliveryPersonId);
+    const updatedOrder = await updateOrderStatus(suggestion.orderId, 'delivering');
+
+    setOptimizationResult((current) => removeOptimizationSuggestion(current, suggestion.orderId));
+
+    if (selectedOrderId === suggestion.orderId) {
+      setSelectedOrder(updatedOrder);
+      setSelectedDeliveryPersonId(updatedOrder.deliveryPerson?.id ?? '');
+    }
+
+    return updatedOrder;
   }
 
   const openReadyOrders = orders.filter((order) => order.status === 'ready').length;
@@ -447,6 +566,141 @@ export function OrdersPage() {
               </label>
             </div>
           </div>
+
+          {canWrite ? (
+            <section className="optimization-console">
+              <div className="optimization-console__header">
+                <div>
+                  <p className="sheet__eyebrow">Optimization lane</p>
+                  <h2>Sugestao automatizada de atribuicao</h2>
+                  <p>
+                    O motor considera apenas pedidos `ready` e entregadores ativos, disponiveis e
+                    com coordenadas operacionais.
+                  </p>
+                </div>
+
+                <div className="editor-form__actions">
+                  <button
+                    className="button"
+                    disabled={isOptimizationLoading || isApplyingSuggestion !== null}
+                    onClick={() => {
+                      void handleLoadOptimization();
+                    }}
+                    type="button"
+                  >
+                    {isOptimizationLoading ? 'Calculando...' : 'Sugerir atribuicao otimizada'}
+                  </button>
+                  {optimizationResult && optimizationResult.assignments.length > 0 ? (
+                    <button
+                      className="button button--ghost"
+                      disabled={isOptimizationLoading || isApplyingSuggestion !== null}
+                      onClick={() => {
+                        void handleApplyAllSuggestions();
+                      }}
+                      type="button"
+                    >
+                      {isApplyingSuggestion === 'all'
+                        ? 'Aplicando...'
+                        : 'Aceitar todas e iniciar entrega'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {optimizationError ? (
+                <div className="inline-feedback inline-feedback--error" role="alert">
+                  {optimizationError}
+                </div>
+              ) : null}
+
+              {isOptimizationLoading ? (
+                <div className="empty-state">
+                  <strong>Montando a matriz de custo da operacao.</strong>
+                  <p>Distancias Haversine e matching global em processamento.</p>
+                </div>
+              ) : optimizationResult ? (
+                <>
+                  <div className="optimization-summary">
+                    <article className="optimization-summary__item">
+                      <span>Atribuicoes</span>
+                      <strong>{optimizationResult.assignments.length}</strong>
+                    </article>
+                    <article className="optimization-summary__item">
+                      <span>Nao atendidos</span>
+                      <strong>{optimizationResult.unassigned.length}</strong>
+                    </article>
+                    <article className="optimization-summary__item">
+                      <span>Distancia total</span>
+                      <strong>{formatDistanceKm(optimizationResult.totalDistanceKm)}</strong>
+                    </article>
+                    <article className="optimization-summary__item">
+                      <span>Execucao</span>
+                      <strong>{formatExecutionTime(optimizationResult.executionTimeMs)}</strong>
+                    </article>
+                  </div>
+
+                  {optimizationResult.assignments.length === 0 &&
+                  optimizationResult.unassigned.length === 0 ? (
+                    <div className="empty-state">
+                      <strong>Nenhum pedido elegivel para otimizar.</strong>
+                      <p>Quando houver pedidos `ready`, a sugestao aparecera aqui.</p>
+                    </div>
+                  ) : (
+                    <div className="optimization-grid">
+                      {optimizationResult.assignments.map((suggestion) => (
+                        <article className="optimization-card" key={suggestion.orderId}>
+                          <div>
+                            <span className="status-pill status-pill--info">Sugestao</span>
+                            <h3>{suggestion.deliveryPersonName}</h3>
+                            <p>{suggestion.orderAddress}</p>
+                          </div>
+                          <div className="optimization-card__meta">
+                            <span>Pedido {suggestion.orderId.slice(0, 8)}</span>
+                            <strong>{formatDistanceKm(suggestion.estimatedDistanceKm)}</strong>
+                          </div>
+                          <button
+                            className="button button--ghost button--small"
+                            disabled={
+                              isApplyingSuggestion !== null || isOptimizationLoading || isSubmitting
+                            }
+                            onClick={() => {
+                              void handleApplySuggestion(suggestion);
+                            }}
+                            type="button"
+                          >
+                            {isApplyingSuggestion === suggestion.orderId
+                              ? 'Aplicando...'
+                              : 'Aceitar e iniciar entrega'}
+                          </button>
+                        </article>
+                      ))}
+
+                      {optimizationResult.unassigned.map((entry) => (
+                        <article
+                          className="optimization-card optimization-card--muted"
+                          key={entry.orderId}
+                        >
+                          <div>
+                            <span className="status-pill status-pill--warning">Sem alocacao</span>
+                            <h3>Pedido {entry.orderId.slice(0, 8)}</h3>
+                            <p>{entry.orderAddress}</p>
+                          </div>
+                          <div className="optimization-card__meta">
+                            <span>{entry.reason}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="empty-state">
+                  <strong>Ainda sem sugestoes carregadas.</strong>
+                  <p>Use o motor otimizado para comparar a fila pronta com a frota disponivel.</p>
+                </div>
+              )}
+            </section>
+          ) : null}
 
           <div className="table-shell">
             {listError ? (
@@ -1022,6 +1276,28 @@ function formatDateTime(value: string) {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function formatDistanceKm(value: number) {
+  return `${new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(value)} km`;
+}
+
+function formatExecutionTime(value: number) {
+  return `${value} ms`;
+}
+
+function removeOptimizationSuggestion(result: OptimizationResult | null, orderId: string) {
+  if (!result) {
+    return result;
+  }
+
+  return {
+    ...result,
+    assignments: result.assignments.filter((assignment) => assignment.orderId !== orderId),
+  };
 }
 
 function toOrderErrorMessage(error: unknown, fallback: string) {

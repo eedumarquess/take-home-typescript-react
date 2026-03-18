@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { VehicleTypeValue } from '../common/enums/vehicle-type.enum';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildDeliveryPersonAvailabilityWhere } from './delivery-person-availability';
 import {
   type DeliveryPersonWithCurrentOrder,
   vehicleTypeToPrisma,
@@ -100,31 +101,7 @@ export class DeliveryPersonsRepository {
   }
 
   private buildWhere(query: ListDeliveryPersonsQueryDto): Prisma.DeliveryPersonWhereInput {
-    if (query.available === true) {
-      return {
-        isActive: query.isActive,
-        orders: {
-          none: {
-            status: OrderStatus.DELIVERING,
-          },
-        },
-      };
-    }
-
-    if (query.available === false) {
-      return {
-        isActive: query.isActive,
-        orders: {
-          some: {
-            status: OrderStatus.DELIVERING,
-          },
-        },
-      };
-    }
-
-    return {
-      isActive: query.isActive,
-    };
+    return buildDeliveryPersonAvailabilityWhere(query.available, query.isActive);
   }
 
   private toPersistenceInput(

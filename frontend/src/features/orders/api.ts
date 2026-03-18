@@ -1,6 +1,7 @@
 import { requestJson } from '../../services/api';
 import type {
   CreateOrderInput,
+  OptimizationResult,
   Order,
   OrderListQuery,
   OrderListResponse,
@@ -33,6 +34,12 @@ export async function assignDeliveryPerson(id: string, deliveryPersonId: string)
   return requestJson<Order>(`/orders/${id}/assign`, {
     body: JSON.stringify({ deliveryPersonId }),
     method: 'PATCH',
+  });
+}
+
+export async function optimizeAssignment() {
+  return requestJson<OptimizationResult>('/orders/optimize-assignment', {
+    method: 'POST',
   });
 }
 

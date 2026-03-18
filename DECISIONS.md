@@ -36,6 +36,13 @@
 - Sprint 04 order detail contract: `GET /api/orders/:id` stays identical to the list payload and does not expose `order_status_events` publicly yet. Status history remains persisted only for auditability and later reports.
 - Sprint 04 orders UI: `/orders` uses the same split-view admin pattern as products and delivery persons, with list/filter controls on the left and create/detail/actions in the right-hand panel.
 - Sprint 04 nested courier shape in orders: when an order has an assigned courier, the payload embeds only the operational summary `{ id, name, phone, vehicleType }` instead of the full delivery-person resource.
+- Sprint 05 optimization algorithm: `POST /api/orders/optimize-assignment` uses the Hungarian algorithm over a padded square cost matrix built from Haversine distances. This keeps exact assignment quality with `O(n^3)` complexity and stays well inside the challenge target for up to 50 orders and 30 couriers.
+- Sprint 05 optimization eligibility: the optimization input includes only `ready` orders plus couriers that are active, not already tied to a `delivering` order, and have both current coordinates filled. Couriers without coordinates are excluded from optimization suggestions rather than guessed or backfilled.
+- Sprint 05 optimization semantics: the backend endpoint remains suggestion-only. Batch application is kept in the frontend by replaying the already accepted operational flow `assign -> delivering`, which avoids introducing a second write contract for assignment side effects.
+- Sprint 05 analytics date semantics:
+  - revenue, top-products and average-delivery-time are filtered by `deliveredAt` and only consider delivered orders
+  - orders-by-status is filtered by `createdAt`, because it represents the distribution of persisted order states within the created-order period
+- Sprint 05 reports implementation tradeoff: analytics are aggregated in the service layer from focused Prisma reads instead of raw SQL. This keeps the take-home easier to audit and test while still leveraging the required status/date indexes already present in the schema.
 
 ## Historical Note
 
