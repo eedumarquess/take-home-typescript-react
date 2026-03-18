@@ -7,7 +7,7 @@ export function getRefreshTokenCookieOptions(configService: ConfigService): Cook
     httpOnly: true,
     sameSite: 'strict',
     secure: configService.getOrThrow<boolean>('COOKIE_SECURE'),
-    path: '/api/auth/refresh',
+    path: '/api/auth',
     maxAge: parseDurationToMilliseconds(configService.getOrThrow<string>('JWT_REFRESH_EXPIRES_IN')),
   };
 }

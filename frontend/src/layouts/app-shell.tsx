@@ -6,7 +6,7 @@ const navigationItems = [
   { to: '/dashboard', label: 'Dashboard', note: 'baseline' },
   { to: '/products', label: 'Produtos', note: 'catalogo' },
   { to: '/orders', label: 'Pedidos', note: 'lifecycle' },
-  { to: '/delivery-persons', label: 'Entregadores', note: 'fleet' },
+  { adminOnly: true, to: '/delivery-persons', label: 'Entregadores', note: 'fleet' },
   { to: '/reports', label: 'Relatorios', note: 'analytics' },
 ];
 
@@ -17,6 +17,9 @@ const formattedToday = new Intl.DateTimeFormat('pt-BR', {
 export function AppShell() {
   const { user, signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const visibleNavigationItems = navigationItems.filter(
+    (item) => !item.adminOnly || user?.role === 'admin',
+  );
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -41,7 +44,7 @@ export function AppShell() {
         </div>
 
         <nav className="app-nav" aria-label="Navegacao principal">
-          {navigationItems.map((item) => (
+          {visibleNavigationItems.map((item) => (
             <NavLink
               key={item.to}
               className={({ isActive }) =>

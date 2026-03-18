@@ -35,7 +35,7 @@ Autentica um usuario, retorna o access token e inicia a sessao com refresh token
 **Set-Cookie:**
 
 ```text
-refreshToken=<jwt>; HttpOnly; Path=/api/auth/refresh; SameSite=Strict; Secure
+refreshToken=<jwt>; HttpOnly; Path=/api/auth; SameSite=Strict; Secure
 ```
 
 **Response 401:**
@@ -67,7 +67,7 @@ Gera um novo access token a partir de um refresh token valido enviado via cookie
 **Set-Cookie:**
 
 ```text
-refreshToken=<novo-jwt>; HttpOnly; Path=/api/auth/refresh; SameSite=Strict; Secure
+refreshToken=<novo-jwt>; HttpOnly; Path=/api/auth; SameSite=Strict; Secure
 ```
 
 **Response 401:**
@@ -80,6 +80,27 @@ refreshToken=<novo-jwt>; HttpOnly; Path=/api/auth/refresh; SameSite=Strict; Secu
   }
 }
 ```
+
+---
+
+### POST /api/auth/logout
+
+Encerra a sessao atual, revoga o refresh token ativo e limpa o cookie `httpOnly`.
+
+**Request Body:** nenhum.
+
+**Response 204:** sem corpo.
+
+**Set-Cookie:**
+
+```text
+refreshToken=; HttpOnly; Path=/api/auth; SameSite=Strict; Max-Age=0
+```
+
+**Comportamento:**
+- se houver refresh token valido no cookie, a sessao correspondente e revogada
+- o endpoint sempre limpa o cookie no cliente
+- o endpoint continua idempotente quando o cookie nao existe ou ja esta invalido
 
 ---
 

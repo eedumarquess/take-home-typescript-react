@@ -29,6 +29,13 @@
 - Frontend testing stack: Vitest + Testing Library.
 - Backend testing strategy: Jest unit tests for services/guards plus Jest e2e tests for HTTP contracts that can run without a live database by overriding `PrismaService`.
 - Prisma CLI configuration: seed/runtime CLI settings live in `backend/prisma.config.ts` instead of `package.json#prisma`, to stay aligned with the Prisma 7 migration path and remove current deprecation warnings.
+- Refresh-token cookie scope: the cookie path is `/api/auth`, not `/api/auth/refresh`, so the same cookie can be used for both refresh rotation and server-side logout revocation.
+- Sprint 02 security verification strategy: RBAC/auth/rate-limit HTTP coverage can use technical probe endpoints registered only in the e2e harness, avoiding premature public controllers before the domain sprints.
+- Sprint 03 delivery-person coordinates: `currentLatitude` and `currentLongitude` are accepted only as a pair. Partial location updates are rejected as validation errors because a single coordinate is not operationally useful.
+- Sprint 03 delivery-person availability filter: `GET /api/delivery-persons?available=false` is supported as the inverse of `available=true`, returning only couriers currently tied to `delivering` orders. This extends the required contract without breaking it.
+- Sprint 04 order detail contract: `GET /api/orders/:id` stays identical to the list payload and does not expose `order_status_events` publicly yet. Status history remains persisted only for auditability and later reports.
+- Sprint 04 orders UI: `/orders` uses the same split-view admin pattern as products and delivery persons, with list/filter controls on the left and create/detail/actions in the right-hand panel.
+- Sprint 04 nested courier shape in orders: when an order has an assigned courier, the payload embeds only the operational summary `{ id, name, phone, vehicleType }` instead of the full delivery-person resource.
 
 ## Historical Note
 
