@@ -100,6 +100,7 @@ async function loadSeedData() {
 }
 
 async function resetDatabase() {
+  await prisma.refreshSession.deleteMany();
   await prisma.orderStatusEvent.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
@@ -186,8 +187,7 @@ async function seedOrders(
       order.createdAt === undefined
         ? (statusEvents[0]?.occurredAt ?? new Date())
         : new Date(order.createdAt);
-    const deliveredAt =
-      order.deliveredAt === undefined ? null : new Date(order.deliveredAt);
+    const deliveredAt = order.deliveredAt === undefined ? null : new Date(order.deliveredAt);
     const updatedAt =
       order.updatedAt === undefined
         ? (deliveredAt ?? statusEvents.at(-1)?.occurredAt ?? createdAt)

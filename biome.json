@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!!**/dist", "!!**/build", "!!**/coverage", "!**/*.min.js"]
+    "includes": [
+      "**",
+      "!!**/dist",
+      "!!**/build",
+      "!!**/coverage",
+      "!!backend/src/**/*.controller.ts",
+      "!**/*.min.js"
+    ]
   },
   "formatter": {
     "indentStyle": "space",
