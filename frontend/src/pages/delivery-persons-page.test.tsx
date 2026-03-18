@@ -45,14 +45,14 @@ describe('DeliveryPersonsPage', () => {
     deleteDeliveryPersonMock.mockResolvedValue(undefined);
   });
 
-  it('blocks the module in the frontend for viewers', () => {
-    renderDeliveryPersonsPage({
+  it('redirects viewers away from the fleet module', async () => {
+    const { router } = renderDeliveryPersonsPage({
       role: 'viewer',
     });
 
-    expect(
-      screen.getByText('Gestao de entregadores reservada ao perfil admin.'),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/dashboard');
+    });
     expect(listDeliveryPersonsMock).not.toHaveBeenCalled();
   });
 
@@ -112,6 +112,10 @@ function renderDeliveryPersonsPage(options: { role: 'admin' | 'viewer' }) {
       {
         path: '/delivery-persons',
         element: <DeliveryPersonsPage />,
+      },
+      {
+        path: '/dashboard',
+        element: <div>Dashboard</div>,
       },
     ],
     {

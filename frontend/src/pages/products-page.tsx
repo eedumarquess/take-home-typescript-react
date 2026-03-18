@@ -1,14 +1,16 @@
-import { startTransition, useDeferredValue, useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { startTransition, useDeferredValue, useState } from 'react';
 import { useAuth } from '../features/auth/auth-context';
 import {
   createProduct,
   deleteProduct,
   getProduct,
   listProducts,
-  updateProduct,
+  patchProduct,
+  updateProductAvailability,
 } from '../features/products/api';
 import type { Product, ProductCategory, SaveProductInput } from '../features/products/types';
-import { ApiError } from '../services/api';
+import { formatApiError } from '../services/error-details';
 
 type ProductFormState = {
   name: string;
@@ -53,70 +55,106 @@ const emptyFormState: ProductFormState = {
 export function ProductsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === 'admin';
-  const [products, setProducts] = useState<Product[]>([]);
   const [searchInput, setSearchInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'all'>('all');
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('all');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'createdAt'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
-  const [isListLoading, setIsListLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [draft, setDraft] = useState<ProductFormState>(emptyFormState);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
-  const [refreshNonce, setRefreshNonce] = useState(0);
-  const [pagination, setPagination] = useState({
+  const deferredSearch = useDeferredValue(searchInput.trim());
+  const queryClient = useQueryClient();
+  const listQuery = useQuery({
+    queryKey: [
+      'products',
+      {
+        availabilityFilter,
+        categoryFilter,
+        deferredSearch,
+        page,
+        sortBy,
+        sortOrder,
+      },
+    ],
+    queryFn: () =>
+      listProducts({
+        category: categoryFilter === 'all' ? undefined : categoryFilter,
+        isAvailable: availabilityFilter === 'all' ? undefined : availabilityFilter === 'available',
+        page,
+        search: deferredSearch || undefined,
+        sortBy,
+        sortOrder,
+      }),
+  });
+  const saveMutation = useMutation({
+    mutationFn: async (payload: SaveProductInput) =>
+      formMode === 'create' || !selectedProductId
+        ? createProduct(payload)
+        : patchProduct(selectedProductId, payload),
+    onSuccess: (savedProduct) => {
+      void queryClient.invalidateQueries({ queryKey: ['products'] });
+      setFeedback({
+        text:
+          formMode === 'create' ? 'Produto criado com sucesso.' : 'Produto atualizado com sucesso.',
+        tone: 'success',
+      });
+      setFormMode('edit');
+      setSelectedProductId(savedProduct.id);
+      setDraft(toProductFormState(savedProduct));
+    },
+    onError: (error) => {
+      setFeedback({
+        text: formatApiError(error, 'Nao foi possivel salvar o produto.'),
+        tone: 'error',
+      });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deleteProduct,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['products'] });
+      setFeedback({
+        text: 'Produto removido com sucesso.',
+        tone: 'success',
+      });
+      handleStartCreate();
+    },
+    onError: (error) => {
+      setFeedback({
+        text: formatApiError(error, 'Nao foi possivel excluir o produto.'),
+        tone: 'error',
+      });
+    },
+  });
+  const toggleAvailabilityMutation = useMutation({
+    mutationFn: ({ id, isAvailable }: { id: string; isAvailable: boolean }) =>
+      updateProductAvailability(id, isAvailable),
+    onSuccess: async (updatedProduct) => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+
+      if (selectedProductId === updatedProduct.id) {
+        setDraft(toProductFormState(updatedProduct));
+      }
+    },
+  });
+  const products = listQuery.data?.data ?? [];
+  const pagination = listQuery.data?.pagination ?? {
     limit: 20,
     page: 1,
     total: 0,
     totalPages: 0,
-  });
-  const deferredSearch = useDeferredValue(searchInput.trim());
-
-  useEffect(() => {
-    const reloadToken = refreshNonce;
-    const query = {
-      category: categoryFilter === 'all' ? undefined : categoryFilter,
-      isAvailable: availabilityFilter === 'all' ? undefined : availabilityFilter === 'available',
-      page,
-      search: deferredSearch || undefined,
-      sortBy,
-      sortOrder,
-    };
-
-    async function run() {
-      if (reloadToken < 0) {
-        return;
-      }
-
-      setIsListLoading(true);
-      setListError(null);
-
-      try {
-        const response = await listProducts(query);
-
-        setProducts(response.data);
-        setPagination(response.pagination);
-      } catch (error) {
-        setProducts([]);
-        setPagination((current) => ({
-          ...current,
-          total: 0,
-          totalPages: 0,
-        }));
-        setListError(toErrorMessage(error, 'Nao foi possivel carregar os produtos.'));
-      } finally {
-        setIsListLoading(false);
-      }
-    }
-
-    void run();
-  }, [availabilityFilter, categoryFilter, deferredSearch, page, refreshNonce, sortBy, sortOrder]);
+  };
+  const isListLoading = listQuery.isLoading;
+  const listError = listQuery.error
+    ? formatApiError(listQuery.error, 'Nao foi possivel carregar os produtos.')
+    : null;
+  const isSubmitting =
+    saveMutation.isPending || deleteMutation.isPending || toggleAvailabilityMutation.isPending;
 
   async function handleSelectProduct(productId: string) {
     if (!canWrite) {
@@ -134,7 +172,7 @@ export function ProductsPage() {
       setDraft(toProductFormState(product));
     } catch (error) {
       setFeedback({
-        text: toErrorMessage(error, 'Nao foi possivel carregar o detalhe do produto.'),
+        text: formatApiError(error, 'Nao foi possivel carregar o detalhe do produto.'),
         tone: 'error',
       });
     } finally {
@@ -163,33 +201,17 @@ export function ProductsPage() {
       return;
     }
 
-    setIsSubmitting(true);
     setFeedback(null);
 
     const payload = toProductPayload(draft);
 
     try {
-      const savedProduct =
-        formMode === 'create' || !selectedProductId
-          ? await createProduct(payload)
-          : await updateProduct(selectedProductId, payload);
-
-      setFeedback({
-        text:
-          formMode === 'create' ? 'Produto criado com sucesso.' : 'Produto atualizado com sucesso.',
-        tone: 'success',
-      });
-      setFormMode('edit');
-      setSelectedProductId(savedProduct.id);
-      setDraft(toProductFormState(savedProduct));
-      setRefreshNonce((current) => current + 1);
+      await saveMutation.mutateAsync(payload);
     } catch (error) {
       setFeedback({
-        text: toErrorMessage(error, 'Nao foi possivel salvar o produto.'),
+        text: formatApiError(error, 'Nao foi possivel salvar o produto.'),
         tone: 'error',
       });
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -198,27 +220,16 @@ export function ProductsPage() {
       return;
     }
 
-    setIsSubmitting(true);
     setFeedback(null);
 
     try {
-      await deleteProduct(selectedProductId);
-      setFeedback({
-        text: 'Produto removido com sucesso.',
-        tone: 'success',
-      });
-      handleStartCreate();
-      setRefreshNonce((current) => current + 1);
+      await deleteMutation.mutateAsync(selectedProductId);
     } catch (error) {
       setFeedback({
-        text:
-          error instanceof ApiError && error.code === 'PRODUCT_IN_USE'
-            ? 'Este produto esta vinculado a pedidos pending ou preparing e nao pode ser excluido.'
-            : toErrorMessage(error, 'Nao foi possivel excluir o produto.'),
+        text: formatApiError(error, 'Nao foi possivel excluir o produto.'),
         tone: 'error',
       });
     } finally {
-      setIsSubmitting(false);
       setIsDeleteConfirming(false);
     }
   }
@@ -401,15 +412,30 @@ export function ProductsPage() {
                       <td>{product.preparationTime} min</td>
                       {canWrite ? (
                         <td>
-                          <button
-                            className="button button--ghost button--small"
-                            onClick={() => {
-                              void handleSelectProduct(product.id);
-                            }}
-                            type="button"
-                          >
-                            Editar
-                          </button>
+                          <div className="detail-actions">
+                            <button
+                              className="button button--ghost button--small"
+                              onClick={() => {
+                                void handleSelectProduct(product.id);
+                              }}
+                              type="button"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              className="button button--ghost button--small"
+                              disabled={toggleAvailabilityMutation.isPending}
+                              onClick={() => {
+                                void toggleAvailabilityMutation.mutateAsync({
+                                  id: product.id,
+                                  isAvailable: !product.isAvailable,
+                                });
+                              }}
+                              type="button"
+                            >
+                              {product.isAvailable ? 'Desativar' : 'Ativar'}
+                            </button>
+                          </div>
                         </td>
                       ) : null}
                     </tr>
@@ -723,8 +749,4 @@ function formatCurrency(value: number) {
     currency: 'BRL',
     style: 'currency',
   }).format(value);
-}
-
-function toErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }
