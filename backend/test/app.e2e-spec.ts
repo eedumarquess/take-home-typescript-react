@@ -1,28 +1,50 @@
-import type { INestApplication } from '@nestjs/common';
-import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import type { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { createTestApp } from './support/create-test-app';
 
-describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
-
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api');
-    await app.init();
+describe('Foundation (e2e)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  it('/api/health (GET)', () => {
-    return request(app.getHttpServer()).get('/api/health').expect(200).expect({
+  it('/api/health (GET) returns database-connected health payload', async () => {
+    const { app } = await createTestApp();
+
+    await request(app.getHttpServer()).get('/api/health').expect(200).expect({
       status: 'ok',
       service: 'fastmeals-api',
       environment: 'test',
-      database: 'prisma-configured',
+      database: 'connected',
     });
+
+    await app.close();
+  });
+
+  it('/api/auth/login (POST) uses the global validation contract', async () => {
+    const { app } = await createTestApp();
+
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'invalid-email' })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Dados invalidos',
+          },
+        });
+        expect(body.error.details).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              field: 'email',
+            }),
+            expect.objectContaining({
+              field: 'password',
+            }),
+          ]),
+        );
+      });
+
+    await app.close();
   });
 });
