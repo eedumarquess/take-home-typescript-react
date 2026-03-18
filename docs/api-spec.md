@@ -107,7 +107,7 @@ refreshToken=; HttpOnly; Path=/api/auth; SameSite=Strict; Max-Age=0
 ## Produtos
 
 > Todas as rotas abaixo requerem autenticacao (header `Authorization: Bearer <accessToken>`).
-> Rotas de escrita (POST, PUT, DELETE) requerem perfil `admin`.
+> Rotas de escrita (POST, PATCH, PUT, DELETE) requerem perfil `admin`.
 
 ### GET /api/products
 
@@ -206,11 +206,40 @@ Cria um novo produto. **Requer perfil `admin`.**
 
 ---
 
+### PATCH /api/products/:id
+
+Atualiza parcialmente um produto existente. **Requer perfil `admin`.**
+
+**Request Body:** Qualquer subconjunto valido do payload de produto.
+
+**Response 200:** Objeto do produto atualizado.
+
+**Response 404:** Produto nao encontrado.
+
+---
+
 ### PUT /api/products/:id
 
-Atualiza um produto existente. **Requer perfil `admin`.**
+Alias de compatibilidade para atualizacao de produto. O contrato recomendado para novas integracoes e `PATCH /api/products/:id`.
 
-**Request Body:** Mesmo formato do POST (todos os campos que serao atualizados).
+**Request Body:** Mesmo formato do `PATCH`.
+
+**Response 200:** Objeto do produto atualizado.
+
+**Response 404:** Produto nao encontrado.
+
+---
+
+### PATCH /api/products/:id/availability
+
+Atualiza apenas a disponibilidade do produto. **Requer perfil `admin`.**
+
+**Request Body:**
+```json
+{
+  "isAvailable": false
+}
+```
 
 **Response 200:** Objeto do produto atualizado.
 
@@ -258,6 +287,8 @@ Lista pedidos com paginacao e filtros.
 | `endDate`   | string  | Nao         | Filtro final de criacao no formato `YYYY-MM-DD`   |
 | `sortBy`    | string  | Nao         | `createdAt` ou `totalAmount` (default: `createdAt`) |
 | `sortOrder` | string  | Nao         | `asc` ou `desc` (default: `desc`)                 |
+
+`startDate` e `endDate` usam o dia civil de Sao Paulo (`America/Sao_Paulo`). Se `startDate > endDate`, a API retorna `400 VALIDATION_ERROR`.
 
 **Response 200:**
 ```json
@@ -563,6 +594,8 @@ Executa o algoritmo de otimizacao de atribuicao. **Requer perfil `admin`.**
 
 Quando omitidos, os filtros de data consideram todo o periodo disponivel.
 
+`startDate` e `endDate` usam o dia civil de Sao Paulo (`America/Sao_Paulo`). Quando presentes na resposta, refletem a janela efetiva usada pela agregacao.
+
 **Response 200:**
 ```json
 {
@@ -592,6 +625,8 @@ Quando omitidos, os filtros de data consideram todo o periodo disponivel.
 **Response 200:**
 ```json
 {
+  "startDate": "2025-01-01",
+  "endDate": "2025-01-31",
   "data": [
     { "status": "pending", "count": 15 },
     { "status": "preparing", "count": 8 },
@@ -650,6 +685,8 @@ Quando omitidos, os filtros de data consideram todo o periodo disponivel.
 **Response 200:**
 ```json
 {
+  "startDate": "2025-01-01",
+  "endDate": "2025-01-31",
   "averageMinutes": 42.5,
   "fastestMinutes": 18,
   "slowestMinutes": 87,
@@ -662,7 +699,7 @@ Quando omitidos, os filtros de data consideram todo o periodo disponivel.
 }
 ```
 
-O calculo deve usar `orders.delivered_at` e o historico em `order_status_events` para auditoria.
+O calculo deve usar `orders.delivered_at` e o historico em `order_status_events` para auditoria. Pedidos entregues sem entregador atribuido nao entram nesse agregado.
 
 ---
 

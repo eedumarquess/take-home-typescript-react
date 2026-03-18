@@ -1,6 +1,6 @@
 # Frontend FastMeals
 
-Dashboard administrativo FastMeals em React 19 + Vite.
+Dashboard administrativo FastMeals em React 19 + Vite + TanStack Query.
 
 ## Requisitos
 
@@ -37,6 +37,23 @@ npm run preview --workspace frontend
 
 Aplicacao publicada em `http://localhost:3000`.
 
+## Fluxos implementados
+
+- login com restauracao de sessao por refresh cookie
+- dashboard operacional alimentado por `/api/reports`
+- produtos com filtros, edicao parcial e toggle de disponibilidade
+- pedidos com polling de 30s enquanto a aba esta visivel
+- sugestoes de optimize-assignment com recomputo dos cards de resumo
+- entregadores com redirecionamento de `viewer` para `/dashboard`
+- relatorios com validacao inline de intervalo de datas
+
+## Arquitetura de dados
+
+- auth state em contexto de sessao
+- dados de dominio com TanStack Query para cache, invalidation e refetch
+- utilitarios compartilhados em `src/services`
+- rotas protegidas com React Router
+
 ## Scripts uteis
 
 ```bash
@@ -48,7 +65,7 @@ npm run typecheck --workspace frontend
 ## Testes
 
 - Vitest + Testing Library
-- cobrindo login, roteamento protegido, produtos, pedidos, entregadores, dashboard e relatorios
+- cobrindo login, roteamento protegido, dashboard, produtos, pedidos, entregadores e relatorios
 
 ## Docker
 
