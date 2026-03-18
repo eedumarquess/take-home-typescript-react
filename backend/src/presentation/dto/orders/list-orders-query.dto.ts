@@ -2,6 +2,7 @@ import { IsDateString, IsEnum, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { OrderStatusValue } from '../../../common/enums/order-status.enum';
 import { SortOrder } from '../../../common/enums/sort-order.enum';
+import { IsOrderedDateRange } from '../../../common/validators/date-range-order.validator';
 
 export enum OrderSortBy {
   CREATED_AT = 'createdAt',
@@ -19,6 +20,7 @@ export class ListOrdersQueryDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsDateString()
+  @IsOrderedDateRange('startDate')
   endDate?: string;
 
   @IsOptional()

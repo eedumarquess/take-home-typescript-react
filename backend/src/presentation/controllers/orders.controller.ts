@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import {
   AssignDeliveryUseCase,
   CreateOrderUseCase,
@@ -31,7 +31,7 @@ export class OrdersController {
 
   @Get(':id')
   @Roles(AppRole.ADMIN, AppRole.VIEWER)
-  getById(@Param('id') id: string) {
+  getById(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.getOrderDetailsUseCase.execute(id);
   }
 
@@ -43,13 +43,19 @@ export class OrdersController {
 
   @Patch(':id/status')
   @Roles(AppRole.ADMIN)
-  updateStatus(@Param('id') id: string, @Body() body: UpdateOrderStatusDto) {
+  updateStatus(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: UpdateOrderStatusDto,
+  ) {
     return this.transitionOrderUseCase.execute(id, body);
   }
 
   @Patch(':id/assign')
   @Roles(AppRole.ADMIN)
-  assignDeliveryPerson(@Param('id') id: string, @Body() body: AssignDeliveryPersonDto) {
+  assignDeliveryPerson(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: AssignDeliveryPersonDto,
+  ) {
     return this.assignDeliveryUseCase.execute(id, body);
   }
 }
