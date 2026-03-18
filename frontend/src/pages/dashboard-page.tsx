@@ -1,27 +1,70 @@
+import { useQueries } from '@tanstack/react-query';
+import {
+  getAverageDeliveryTimeReport,
+  getOrdersByStatusReport,
+  getRevenueReport,
+} from '../features/reports/api';
 import { apiBaseUrl } from '../services/api';
-
-const readinessCards = [
-  {
-    title: 'Catalogo sob controle',
-    body: 'Produtos entram com validacao estrita, filtros operacionais e bloqueios coerentes para itens ligados a pedidos ativos.',
-  },
-  {
-    title: 'Fila de pedidos viva',
-    body: 'A operacao acompanha transicoes de status, atribuicao manual e optimize-assignment sem sair do mesmo fluxo.',
-  },
-  {
-    title: 'Leitura analitica',
-    body: 'Receita, distribuicao de status e tempo medio de entrega saem direto do backend com recorte por periodo.',
-  },
-];
-
-const operationalTracks = [
-  'Monitore gargalos entre pending, preparing, ready e delivering sem trocar de contexto.',
-  'Revise disponibilidade de produtos e impacto imediato em novos pedidos antes de publicar mudancas.',
-  'Aplique optimize-assignment com entregadores ativos e acompanhe o reflexo nos relatorios.',
-];
+import { formatApiError } from '../services/error-details';
 
 export function DashboardPage() {
+  const [revenueQuery, ordersByStatusQuery, averageDeliveryTimeQuery] = useQueries({
+    queries: [
+      {
+        queryKey: ['dashboard', 'revenue'],
+        queryFn: () => getRevenueReport(),
+      },
+      {
+        queryKey: ['dashboard', 'orders-by-status'],
+        queryFn: () => getOrdersByStatusReport(),
+      },
+      {
+        queryKey: ['dashboard', 'average-delivery-time'],
+        queryFn: () => getAverageDeliveryTimeReport(),
+      },
+    ],
+  });
+  const isLoading =
+    revenueQuery.isLoading || ordersByStatusQuery.isLoading || averageDeliveryTimeQuery.isLoading;
+  const errorMessage =
+    revenueQuery.error || ordersByStatusQuery.error || averageDeliveryTimeQuery.error
+      ? formatApiError(
+          revenueQuery.error ?? ordersByStatusQuery.error ?? averageDeliveryTimeQuery.error,
+          'Nao foi possivel carregar o overview operacional.',
+        )
+      : null;
+  const readyOrders =
+    ordersByStatusQuery.data?.data.find((entry) => entry.status === 'ready')?.count ?? 0;
+  const deliveringOrders =
+    ordersByStatusQuery.data?.data.find((entry) => entry.status === 'delivering')?.count ?? 0;
+  const deliveredOrders =
+    ordersByStatusQuery.data?.data.find((entry) => entry.status === 'delivered')?.count ?? 0;
+  const summaryCards = [
+    {
+      title: 'Receita entregue',
+      body: revenueQuery.data
+        ? formatCurrency(revenueQuery.data.totalRevenue)
+        : isLoading
+          ? 'Atualizando...'
+          : 'Sem leitura',
+    },
+    {
+      title: 'Pedidos prontos',
+      body: String(readyOrders),
+    },
+    {
+      title: 'Tempo medio',
+      body: averageDeliveryTimeQuery.data
+        ? `${averageDeliveryTimeQuery.data.averageMinutes.toFixed(1)} min`
+        : '0 min',
+    },
+  ];
+  const operationalTracks = [
+    `${readyOrders} pedidos estao em ready aguardando atribuicao operacional.`,
+    `${deliveringOrders} pedidos estao em rota agora.`,
+    `${deliveredOrders} pedidos concluidos ja alimentam os relatorios de receita.`,
+  ];
+
   return (
     <section className="page page--dashboard">
       <header className="dashboard-hero">
@@ -29,8 +72,8 @@ export function DashboardPage() {
           <p className="page-header__eyebrow">Operations Board</p>
           <h1>Central de operacoes pronta para catalogo, fila e distribuicao.</h1>
           <p className="page-header__summary">
-            O dashboard resume a superficie administrativa real do FastMeals: ambiente conectado,
-            modulos operacionais e a base analitica que sustenta decisao diaria.
+            O dashboard agora espelha a operacao real do FastMeals com indicadores vivos de receita,
+            fila e performance de entrega puxados do backend.
           </p>
         </div>
 
@@ -40,10 +83,17 @@ export function DashboardPage() {
         </div>
       </header>
 
+      {errorMessage ? (
+        <div className="sheet empty-state empty-state--error" role="alert">
+          <strong>Falha ao carregar o overview.</strong>
+          <p>{errorMessage}</p>
+        </div>
+      ) : null}
+
       <div className="dashboard-grid">
-        {readinessCards.map((card) => (
+        {summaryCards.map((card) => (
           <article key={card.title} className="sheet">
-            <p className="sheet__eyebrow">Panorama</p>
+            <p className="sheet__eyebrow">Panorama vivo</p>
             <h2>{card.title}</h2>
             <p>{card.body}</p>
           </article>
@@ -63,11 +113,19 @@ export function DashboardPage() {
         <article className="callout">
           <p className="callout__eyebrow">Leitura rapida</p>
           <strong>
-            O pacote entregue cobre login, CRUDs, analytics e optimize-assignment sem copy de sprint
-            interna.
+            {isLoading
+              ? 'Sincronizando os modulos para montar o quadro operacional.'
+              : `${revenueQuery.data?.totalOrders ?? 0} pedidos entregues compoem a leitura atual de receita.`}
           </strong>
         </article>
       </div>
     </section>
   );
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    currency: 'BRL',
+    style: 'currency',
+  }).format(value);
 }
