@@ -2,7 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { apiBaseUrl } from '../services/api';
 
 const promisePoints = [
-  'JWT com access token curto e refresh via cookie `httpOnly`.',
+  'JWT com access token curto e refresh via cookie httpOnly.',
   'Base de validacao, rate limit e tratamento de erro unificados no backend.',
   'Shell navegavel para dashboard, produtos, pedidos, entregadores e relatorios.',
 ];
@@ -12,10 +12,10 @@ export function PublicShell() {
     <div className="login-shell">
       <section className="login-hero">
         <p className="login-hero__eyebrow">FastMeals Ops Console</p>
-        <h1>Da landing para um painel com postura operacional real.</h1>
+        <h1>Painel administrativo para operar catalogo, fila e distribuicao.</h1>
         <p className="login-hero__body">
-          Esta primeira sprint congela os alicerces: autenticao, contratos transversais, roteamento
-          e uma composicao de modulos pronta para os sprints de negocio.
+          O acesso centraliza o fluxo real do desafio: login com refresh seguro, modulos protegidos
+          por perfil e uma superficie pronta para administrar produtos, pedidos e relatorios.
         </p>
 
         <ul className="login-hero__list">
