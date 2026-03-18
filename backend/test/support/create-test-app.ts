@@ -70,7 +70,16 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     users: [...(options.users ?? [])],
   };
 
-  const basePrismaMock = {
+  let prismaMock: Record<string, unknown>;
+
+  const basePrismaMock: Record<string, unknown> = {
+    $transaction: jest.fn((arg: unknown): unknown => {
+      if (typeof arg === 'function') {
+        return arg(prismaMock);
+      }
+
+      return Promise.all(arg as Array<Promise<unknown>>);
+    }),
     $queryRaw: jest.fn().mockResolvedValue([{ ok: 1 }]),
     refreshSession: {
       create: jest.fn(
@@ -136,7 +145,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       ),
     },
   };
-  const prismaMock = {
+  prismaMock = {
     ...basePrismaMock,
     ...options.prismaOverrides,
   };
