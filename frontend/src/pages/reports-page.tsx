@@ -152,7 +152,7 @@ export function ReportsPage() {
         </div>
 
         <aside className="reports-band">
-          <span>Radar da sprint 05</span>
+          <span>Recorte atual</span>
           <strong>
             {isRefreshing ? 'Refinando recorte...' : describeAppliedPeriod(appliedFilters)}
           </strong>

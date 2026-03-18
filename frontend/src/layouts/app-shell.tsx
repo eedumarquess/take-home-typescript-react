@@ -3,10 +3,10 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../features/auth/auth-context';
 
 const navigationItems = [
-  { to: '/dashboard', label: 'Dashboard', note: 'baseline' },
+  { to: '/dashboard', label: 'Dashboard', note: 'visao geral' },
   { to: '/products', label: 'Produtos', note: 'catalogo' },
-  { to: '/orders', label: 'Pedidos', note: 'lifecycle' },
-  { adminOnly: true, to: '/delivery-persons', label: 'Entregadores', note: 'fleet' },
+  { to: '/orders', label: 'Pedidos', note: 'operacao' },
+  { adminOnly: true, to: '/delivery-persons', label: 'Entregadores', note: 'frota' },
   { to: '/reports', label: 'Relatorios', note: 'analytics' },
 ];
 
@@ -36,10 +36,10 @@ export function AppShell() {
       <aside className="app-sidebar">
         <div className="app-brand">
           <p className="app-brand__eyebrow">FastMeals Admin</p>
-          <h1>Kitchen pass para operacao, catalogo e entrega.</h1>
+          <h1>Operacao, catalogo e distribuicao no mesmo cockpit.</h1>
           <p className="app-brand__body">
-            O shell do sprint 01 organiza os modulos e fixa o comportamento de acesso antes do CRUD
-            real entrar em cena.
+            Produtos, pedidos, entregadores e relatorios compartilham o mesmo shell autenticado com
+            RBAC e recuperacao de sessao por refresh cookie.
           </p>
         </div>
 
@@ -68,7 +68,7 @@ export function AppShell() {
       <div className="app-main">
         <header className="app-topbar">
           <div>
-            <p className="app-topbar__eyebrow">Sprint 01</p>
+            <p className="app-topbar__eyebrow">Operacao FastMeals</p>
             <strong>{formattedToday}</strong>
           </div>
 
