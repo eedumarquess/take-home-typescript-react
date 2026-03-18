@@ -4,6 +4,7 @@ export type AssignmentOrderCandidate = {
   id: string;
   deliveryAddress: string;
   coordinates: Coordinates;
+  createdAt: Date;
 };
 
 export type AssignmentDeliveryPersonCandidate = {
