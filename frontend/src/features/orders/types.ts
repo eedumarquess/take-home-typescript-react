@@ -6,6 +6,28 @@ export type OrderStatus =
   | 'delivered'
   | 'cancelled';
 
+export type OptimizationAssignment = {
+  orderId: string;
+  deliveryPersonId: string;
+  estimatedDistanceKm: number;
+  orderAddress: string;
+  deliveryPersonName: string;
+};
+
+export type OptimizationUnassignedOrder = {
+  orderId: string;
+  orderAddress: string;
+  reason: string;
+};
+
+export type OptimizationResult = {
+  assignments: OptimizationAssignment[];
+  unassigned: OptimizationUnassignedOrder[];
+  totalDistanceKm: number;
+  algorithm: 'hungarian';
+  executionTimeMs: number;
+};
+
 export type Order = {
   id: string;
   customerName: string;
