@@ -284,6 +284,7 @@ Expected local ports from `.env.example`:
 
 ## Guidance For Future Agents
 
+- **Never** use `parser.unsafeParameterDecoratorsEnabled: true` in `biome.json`. Do not add or restore this option; if present, remove it.
 - Read `docs/api-spec.md` before changing route contracts.
 - Read `docs/database-schema.md` before altering persistence models.
 - Keep behavior aligned with the explicit business rules above.
