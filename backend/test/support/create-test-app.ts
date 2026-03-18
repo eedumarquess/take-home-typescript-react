@@ -1,32 +1,148 @@
 import type { INestApplication } from '@nestjs/common';
+import { Controller, Get, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
+import type { RefreshSession, User } from '@prisma/client';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/bootstrap/configure-app';
+import { Public } from '../../src/common/decorators/public.decorator';
+import { Roles } from '../../src/common/decorators/roles.decorator';
+import { AppRole } from '../../src/common/enums/app-role.enum';
+import type { TokenPayload } from '../../src/common/interfaces/token-payload.interface';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
 type TestAppOptions = {
   env?: Partial<Record<string, string>>;
   prismaOverrides?: Record<string, unknown>;
+  users?: User[];
+  refreshSessions?: RefreshSession[];
+};
+
+type TestAppStores = {
+  refreshSessions: RefreshSession[];
+  users: User[];
 };
 
 type TestAppContext = {
   app: INestApplication;
+  issueAccessToken: (payload: Omit<TokenPayload, 'iat' | 'exp'>) => Promise<string>;
   prismaMock: Record<string, unknown>;
+  stores: TestAppStores;
 };
+
+@Controller('security-probe')
+class SecurityProbeController {
+  @Public()
+  @Get('public')
+  getPublic() {
+    return {
+      status: 'ok',
+    };
+  }
+
+  @Get('protected')
+  getProtected() {
+    return {
+      status: 'ok',
+    };
+  }
+
+  @Roles(AppRole.ADMIN)
+  @Get('admin')
+  getAdmin() {
+    return {
+      status: 'ok',
+    };
+  }
+}
+
+@Module({
+  controllers: [SecurityProbeController],
+})
+class SecurityProbeTestModule {}
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestAppContext> {
   applyEnvironmentOverrides(options.env);
 
-  const prismaMock = {
+  const stores: TestAppStores = {
+    refreshSessions: [...(options.refreshSessions ?? [])],
+    users: [...(options.users ?? [])],
+  };
+
+  const basePrismaMock = {
     $queryRaw: jest.fn().mockResolvedValue([{ ok: 1 }]),
-    user: {
-      findUnique: jest.fn(),
+    refreshSession: {
+      create: jest.fn(
+        ({
+          data,
+        }: {
+          data: {
+            expiresAt: Date;
+            replacedByTokenId?: string | null;
+            tokenId: string;
+            userId: string;
+          };
+        }) => {
+          const session: RefreshSession = {
+            id: `refresh-session-${stores.refreshSessions.length + 1}`,
+            userId: data.userId,
+            tokenId: data.tokenId,
+            expiresAt: data.expiresAt,
+            revokedAt: null,
+            replacedByTokenId: data.replacedByTokenId ?? null,
+            createdAt: new Date(),
+          };
+
+          stores.refreshSessions.push(session);
+
+          return Promise.resolve(session);
+        },
+      ),
+      findUnique: jest.fn(({ where }: { where: { tokenId: string } }) =>
+        Promise.resolve(
+          stores.refreshSessions.find((session) => session.tokenId === where.tokenId) ?? null,
+        ),
+      ),
+      update: jest.fn(
+        ({ where, data }: { where: { tokenId: string }; data: Partial<RefreshSession> }) => {
+          const session = stores.refreshSessions.find((entry) => entry.tokenId === where.tokenId);
+
+          if (!session) {
+            return Promise.resolve(null);
+          }
+
+          Object.assign(session, data);
+
+          return Promise.resolve(session);
+        },
+      ),
     },
+    user: {
+      findUnique: jest.fn(({ where }: { where: { email?: string; id?: string } }) =>
+        Promise.resolve(
+          stores.users.find((user) => {
+            if (where.email) {
+              return user.email === where.email;
+            }
+
+            if (where.id) {
+              return user.id === where.id;
+            }
+
+            return false;
+          }) ?? null,
+        ),
+      ),
+    },
+  };
+  const prismaMock = {
+    ...basePrismaMock,
     ...options.prismaOverrides,
   };
 
   const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
+    imports: [AppModule, SecurityProbeTestModule],
   })
     .overrideProvider(PrismaService)
     .useValue(prismaMock)
@@ -37,25 +153,34 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   configureApp(app);
   await app.init();
 
+  const jwtService = app.get(JwtService);
+  const configService = app.get(ConfigService);
+
   return {
     app,
+    async issueAccessToken(payload) {
+      return jwtService.signAsync(payload, {
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
+      });
+    },
     prismaMock,
+    stores,
   };
 }
 
 function applyEnvironmentOverrides(overrides?: Partial<Record<string, string>>) {
   const defaults: Record<string, string> = {
+    COOKIE_SECURE: 'false',
     DATABASE_URL: 'postgresql://fastmeals:fastmeals@localhost:5432/fastmeals_test',
-    JWT_SECRET: 'test-secret',
-    JWT_REFRESH_SECRET: 'test-refresh-secret',
+    FRONTEND_URL: 'http://localhost:3000',
     JWT_EXPIRES_IN: '15m',
     JWT_REFRESH_EXPIRES_IN: '7d',
-    PORT: '3001',
+    JWT_REFRESH_SECRET: 'test-refresh-secret',
+    JWT_SECRET: 'test-secret',
     NODE_ENV: 'test',
-    FRONTEND_URL: 'http://localhost:3000',
-    THROTTLE_TTL_SECONDS: '60',
+    PORT: '3001',
     THROTTLE_LIMIT: '100',
-    COOKIE_SECURE: 'false',
+    THROTTLE_TTL_SECONDS: '60',
   };
 
   for (const [key, value] of Object.entries({
