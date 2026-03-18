@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fastmeals-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fastmeals
+      POSTGRES_USER: fastmeals
+      POSTGRES_PASSWORD: fastmeals123
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fastmeals -d fastmeals']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - fastmeals-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  fastmeals-postgres-data:
