@@ -1,8 +1,1 @@
-export enum OrderStatusValue {
-  PENDING = 'pending',
-  PREPARING = 'preparing',
-  READY = 'ready',
-  DELIVERING = 'delivering',
-  DELIVERED = 'delivered',
-  CANCELLED = 'cancelled',
-}
+export { OrderStatusValue } from '../../domain/orders/order-status.enum';

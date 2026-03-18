@@ -2,7 +2,7 @@
 
 ## Current Repository Decisions
 
-- Architecture style: DDD-inspired modular backend structure.
+- Architecture style: layered DDD backend structure with explicit `presentation -> application -> domain <- infrastructure` boundaries.
 - ORM: Prisma.
 - Linting and formatting: Biome.
 - Database: PostgreSQL only.
@@ -11,7 +11,9 @@
 - Roles: `admin` has operational access; `viewer` is read-only for products, orders, and reports only.
 - Orders: `deliveredAt` and `order_status_events` are part of the reference model for delivery-time analytics and auditability.
 - Optimization acceptance flow: the client applies a suggestion with `PATCH /api/orders/:id/assign` followed by `PATCH /api/orders/:id/status` with `status=delivering`.
-- Backend composition root: `AppModule` wires global filter and guards, while domain modules own controllers/services/repositories.
+- Backend composition root: `AppModule` wires global filter and guards, while feature modules in `src/presentation/modules` compose controllers, use cases and infrastructure adapters.
+- Backend DDD implementation: NestJS is kept strictly as presentation/composition. Controllers live under `src/presentation`, use cases under `src/application`, aggregates/value objects/ports under `src/domain`, and Prisma/JWT/bcrypt/Hungarian adapters under `src/infrastructure`.
+- Backend contract migration rule: the DDD refactor preserves the existing `/api` route contract, payload shapes, validation behavior, error format, JWT/refresh-cookie semantics, and RBAC/rate-limit behavior.
 - Shared backend foundation: `src/common` centralizes DTOs, decorators, guards, filters, errors and reusable transforms before CRUD implementation begins.
 - Auth implementation strategy for the challenge: JWT access token plus stateful refresh-token rotation backed by persisted refresh sessions keyed by `jti`.
 - Frontend auth strategy: access token kept only in memory; session restoration depends on the refresh-token cookie and `/api/auth/refresh`.
@@ -42,7 +44,7 @@
 - Sprint 05 analytics date semantics:
   - revenue, top-products and average-delivery-time are filtered by `deliveredAt` and only consider delivered orders
   - orders-by-status is filtered by `createdAt`, because it represents the distribution of persisted order states within the created-order period
-- Sprint 05 reports implementation tradeoff: analytics are aggregated in the service layer from focused Prisma reads instead of raw SQL. This keeps the take-home easier to audit and test while still leveraging the required status/date indexes already present in the schema.
+- Sprint 05 reports implementation tradeoff: analytics are aggregated in application use cases from focused Prisma reads instead of raw SQL. This keeps the take-home easier to audit and test while still leveraging the required status/date indexes already present in the schema.
 - Sprint 06 line endings policy: `.gitattributes` enforces LF for source and docs, while keeping Windows-native endings only for shell scripts that need them. This removes recurring Biome noise across environments.
 - Sprint 06 container packaging: Docker delivery uses three runtime services plus one one-shot init job. `backend-init` runs `prisma db push` and `seed`, `backend` exposes the NestJS API, and `frontend` serves the Vite build through Nginx.
 - Sprint 06 frontend delivery: the SPA is published behind an Nginx fallback so deep links from React Router keep working in the containerized runtime.
