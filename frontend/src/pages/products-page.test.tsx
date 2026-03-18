@@ -5,7 +5,8 @@ import {
   deleteProduct,
   getProduct,
   listProducts,
-  updateProduct,
+  patchProduct,
+  updateProductAvailability,
 } from '../features/products/api';
 import { ApiError } from '../services/api';
 import { renderWithAuthRouter } from '../test/render-with-auth';
@@ -16,14 +17,16 @@ vi.mock('../features/products/api', () => ({
   deleteProduct: vi.fn(),
   getProduct: vi.fn(),
   listProducts: vi.fn(),
-  updateProduct: vi.fn(),
+  patchProduct: vi.fn(),
+  updateProductAvailability: vi.fn(),
 }));
 
 const listProductsMock = vi.mocked(listProducts);
 const getProductMock = vi.mocked(getProduct);
 const createProductMock = vi.mocked(createProduct);
-const updateProductMock = vi.mocked(updateProduct);
+const patchProductMock = vi.mocked(patchProduct);
 const deleteProductMock = vi.mocked(deleteProduct);
+const updateProductAvailabilityMock = vi.mocked(updateProductAvailability);
 
 const baseListResponse = {
   data: [
@@ -66,8 +69,9 @@ describe('ProductsPage', () => {
     listProductsMock.mockResolvedValue(baseListResponse);
     getProductMock.mockResolvedValue(baseListResponse.data[0]);
     createProductMock.mockResolvedValue(baseListResponse.data[0]);
-    updateProductMock.mockResolvedValue(baseListResponse.data[0]);
+    patchProductMock.mockResolvedValue(baseListResponse.data[0]);
     deleteProductMock.mockResolvedValue(undefined);
+    updateProductAvailabilityMock.mockResolvedValue(baseListResponse.data[0]);
   });
 
   it('renders the catalog table for viewers and keeps unavailable products visible', async () => {
@@ -172,7 +176,7 @@ describe('ProductsPage', () => {
 
     expect(
       await screen.findByText(
-        'Este produto esta vinculado a pedidos pending ou preparing e nao pode ser excluido.',
+        'Nao e possivel deletar este produto pois ele esta vinculado a pedidos com status pending ou preparing',
       ),
     ).toBeInTheDocument();
   });

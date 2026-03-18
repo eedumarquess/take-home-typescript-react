@@ -27,12 +27,14 @@ describe('Optimization and Reports (e2e)', () => {
           findMany: jest.fn().mockResolvedValue([
             {
               deliveryAddress: 'Rua Augusta, 10',
+              createdAt: new Date('2025-01-01T10:00:00.000Z'),
               id: 'order-1',
               latitude: new Prisma.Decimal('-23.55055'),
               longitude: new Prisma.Decimal('-46.63331'),
             },
             {
               deliveryAddress: 'Av. Paulista, 1000',
+              createdAt: new Date('2025-01-01T10:05:00.000Z'),
               id: 'order-2',
               latitude: new Prisma.Decimal('-23.56141'),
               longitude: new Prisma.Decimal('-46.65657'),
@@ -73,59 +75,46 @@ describe('Optimization and Reports (e2e)', () => {
   });
 
   it('returns delivered revenue and top products for viewer users', async () => {
-    const deliveredOrders = [
-      {
-        deliveredAt: new Date('2025-01-01T12:00:00.000Z'),
-        totalAmount: new Prisma.Decimal('50.00'),
-      },
-      {
-        deliveredAt: new Date('2025-01-02T12:00:00.000Z'),
-        totalAmount: new Prisma.Decimal('30.00'),
-      },
-    ];
-    const deliveredItems = [
-      {
-        product: {
-          id: 'product-1',
-          name: 'X-Burger',
-        },
-        quantity: 4,
-        unitPrice: new Prisma.Decimal('30.00'),
-      },
-      {
-        product: {
-          id: 'product-2',
-          name: 'Suco',
-        },
-        quantity: 2,
-        unitPrice: new Prisma.Decimal('8.00'),
-      },
-    ];
     const { app, issueAccessToken } = await createTestApp({
       prismaOverrides: {
+        $queryRaw: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              date: '2025-01-01',
+              orders: 1,
+              revenue: 50,
+            },
+            {
+              date: '2025-01-02',
+              orders: 1,
+              revenue: 30,
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              productId: 'product-1',
+              productName: 'X-Burger',
+              totalQuantity: 4,
+              totalRevenue: 120,
+            },
+          ]),
         order: {
-          findMany: jest.fn(({ select }: { select?: Record<string, unknown> }) => {
-            if (select?.status) {
-              return Promise.resolve([{ status: OrderStatus.DELIVERED }]);
-            }
-
-            if (select?.deliveryPerson) {
-              return Promise.resolve([
-                {
-                  createdAt: new Date('2025-01-01T10:00:00.000Z'),
-                  deliveredAt: new Date('2025-01-01T10:30:00.000Z'),
-                  deliveryPerson: {
-                    vehicleType: 'MOTORCYCLE',
-                  },
-                },
-              ]);
-            }
-
-            return Promise.resolve(deliveredOrders);
-          }),
-        },
-        orderItem: {
-          findMany: jest.fn().mockResolvedValue(deliveredItems),
+          aggregate: jest
+            .fn()
+            .mockResolvedValueOnce({
+              _count: { _all: 2 },
+              _max: { deliveredAt: new Date('2025-01-02T12:00:00.000Z') },
+              _min: { deliveredAt: new Date('2025-01-01T12:00:00.000Z') },
+              _sum: { totalAmount: new Prisma.Decimal('80.00') },
+            })
+            .mockResolvedValueOnce({
+              _max: { createdAt: null },
+              _min: { createdAt: null },
+            }),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ _count: { _all: 1 }, status: OrderStatus.DELIVERED }]),
         },
       },
     });

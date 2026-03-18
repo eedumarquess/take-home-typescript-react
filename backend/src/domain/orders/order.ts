@@ -62,6 +62,8 @@ export class Order {
       unitPrice: Money;
     }>;
   }) {
+    assertUniqueProducts(input.items.map((item) => item.productId));
+
     const totalAmount = input.items.reduce(
       (sum, item) => sum.add(item.unitPrice.multiply(item.quantity)),
       Money.fromNumber(0),
@@ -87,7 +89,7 @@ export class Order {
     });
   }
 
-  transitionTo(nextStatus: OrderStatusValue) {
+  transitionTo(nextStatus: OrderStatusValue, occurredAt = new Date()) {
     if (!validTransitions[this.props.status].includes(nextStatus)) {
       throw new DomainError(
         `Nao e possivel alterar o status de '${this.props.status}' para '${nextStatus}'`,
@@ -104,9 +106,9 @@ export class Order {
 
     return new Order({
       ...this.props,
-      deliveredAt: nextStatus === OrderStatusValue.DELIVERED ? new Date() : null,
+      deliveredAt: nextStatus === OrderStatusValue.DELIVERED ? occurredAt : null,
       status: nextStatus,
-      updatedAt: new Date(),
+      updatedAt: occurredAt,
     });
   }
 
@@ -132,5 +134,20 @@ export class Order {
 
   toPrimitives() {
     return this.props;
+  }
+}
+
+function assertUniqueProducts(productIds: string[]) {
+  const seenProductIds = new Set<string>();
+
+  for (const productId of productIds) {
+    if (seenProductIds.has(productId)) {
+      throw new DomainError(
+        'Nao e permitido repetir produtos no mesmo pedido',
+        'DUPLICATE_ORDER_ITEM',
+      );
+    }
+
+    seenProductIds.add(productId);
   }
 }

@@ -1,4 +1,5 @@
 import { requestJson } from '../../services/api';
+import { buildQueryString } from '../../services/query-string';
 import type { Product, ProductListQuery, ProductListResponse, SaveProductInput } from './types';
 
 export async function listProducts(query: ProductListQuery = {}) {
@@ -23,24 +24,22 @@ export async function updateProduct(id: string, payload: SaveProductInput) {
   });
 }
 
+export async function patchProduct(id: string, payload: Partial<SaveProductInput>) {
+  return requestJson<Product>(`/products/${id}`, {
+    body: JSON.stringify(payload),
+    method: 'PATCH',
+  });
+}
+
+export async function updateProductAvailability(id: string, isAvailable: boolean) {
+  return requestJson<Product>(`/products/${id}/availability`, {
+    body: JSON.stringify({ isAvailable }),
+    method: 'PATCH',
+  });
+}
+
 export async function deleteProduct(id: string) {
   return requestJson<void>(`/products/${id}`, {
     method: 'DELETE',
   });
-}
-
-function buildQueryString(query: ProductListQuery) {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === '') {
-      continue;
-    }
-
-    params.set(key, String(value));
-  }
-
-  const serialized = params.toString();
-
-  return serialized ? `?${serialized}` : '';
 }

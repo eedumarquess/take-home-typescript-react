@@ -25,7 +25,8 @@ export class LoginUseCase {
   ) {}
 
   async execute(input: { email: string; password: string }) {
-    const user = await this.usersRepository.findByEmail(new Email(input.email));
+    const email = new Email(input.email);
+    const user = await this.usersRepository.findByEmail(email);
 
     if (!user) {
       throw invalidCredentials();
@@ -43,11 +44,13 @@ export class LoginUseCase {
       role: user.role,
     };
 
-    const tokens = await issueTokens(
-      authenticatedUser,
-      this.tokenService,
-      this.refreshSessionRepository,
-    );
+    await this.refreshSessionRepository.cleanupExpiredAndRevoked({ userId: user.id });
+    const tokens = await prepareTokens(authenticatedUser, this.tokenService);
+    await this.refreshSessionRepository.create({
+      expiresAt: tokens.refreshTokenExpiresAt,
+      tokenId: tokens.refreshTokenId,
+      userId: user.id,
+    });
 
     return {
       accessToken: tokens.accessToken,
@@ -92,21 +95,27 @@ export class RefreshTokenUseCase {
       throw invalidRefreshToken();
     }
 
-    const tokens = await issueTokens(
+    await this.refreshSessionRepository.cleanupExpiredAndRevoked({ userId: user.id });
+    const revokedAt = new Date();
+    const tokens = await prepareTokens(
       {
         id: user.id,
         email: user.email.value,
         role: user.role,
       },
       this.tokenService,
-      this.refreshSessionRepository,
     );
-
-    await this.refreshSessionRepository.revoke({
-      replacedByTokenId: tokens.refreshTokenId,
-      revokedAt: new Date(),
-      tokenId: payload.jti,
+    const rotated = await this.refreshSessionRepository.rotate({
+      currentTokenId: payload.jti,
+      replacementExpiresAt: tokens.refreshTokenExpiresAt,
+      replacementTokenId: tokens.refreshTokenId,
+      revokedAt,
+      userId: user.id,
     });
+
+    if (!rotated) {
+      throw invalidRefreshToken();
+    }
 
     return {
       accessToken: tokens.accessToken,
@@ -133,7 +142,7 @@ export class RevokeTokenUseCase {
         return;
       }
 
-      await this.refreshSessionRepository.revoke({
+      await this.refreshSessionRepository.revokeIfActive({
         revokedAt: new Date(),
         tokenId: payload.jti,
       });
@@ -143,13 +152,12 @@ export class RevokeTokenUseCase {
   }
 }
 
-async function issueTokens(
-  user: AuthenticatedUser,
-  tokenService: ITokenService,
-  refreshSessionRepository: IRefreshSessionRepository,
-) {
+async function prepareTokens(user: AuthenticatedUser, tokenService: ITokenService) {
   const refreshTokenId = randomUUID();
   const refreshTokenExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN as StringValue;
+  const refreshTokenExpiresAt = new Date(
+    Date.now() + parseDurationToMilliseconds(refreshTokenExpiresIn),
+  );
 
   const [accessToken, refreshToken] = await Promise.all([
     tokenService.signAccessToken({
@@ -165,15 +173,10 @@ async function issueTokens(
     }),
   ]);
 
-  await refreshSessionRepository.create({
-    expiresAt: new Date(Date.now() + parseDurationToMilliseconds(refreshTokenExpiresIn)),
-    tokenId: refreshTokenId,
-    userId: user.id,
-  });
-
   return {
     accessToken,
     refreshToken,
+    refreshTokenExpiresAt,
     refreshTokenId,
   };
 }

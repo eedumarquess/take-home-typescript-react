@@ -4,6 +4,7 @@ import {
   DeleteProductUseCase,
   GetProductUseCase,
   ListProductsUseCase,
+  PatchProductUseCase,
   ToggleAvailabilityUseCase,
   UpdateProductUseCase,
 } from '../../application/products/products.use-cases';
@@ -42,6 +43,12 @@ import { ProductsController } from '../controllers/products.controller';
       provide: UpdateProductUseCase,
       useFactory: (productsRepository: PrismaProductRepository) =>
         new UpdateProductUseCase(productsRepository),
+      inject: [APPLICATION_TOKENS.PRODUCT_REPOSITORY],
+    },
+    {
+      provide: PatchProductUseCase,
+      useFactory: (productsRepository: PrismaProductRepository) =>
+        new PatchProductUseCase(productsRepository),
       inject: [APPLICATION_TOKENS.PRODUCT_REPOSITORY],
     },
     {

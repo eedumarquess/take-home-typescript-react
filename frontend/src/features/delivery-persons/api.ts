@@ -1,4 +1,5 @@
 import { requestJson } from '../../services/api';
+import { buildQueryString } from '../../services/query-string';
 import type {
   DeliveryPerson,
   DeliveryPersonListQuery,
@@ -28,20 +29,4 @@ export async function deleteDeliveryPerson(id: string) {
   return requestJson<void>(`/delivery-persons/${id}`, {
     method: 'DELETE',
   });
-}
-
-function buildQueryString(query: DeliveryPersonListQuery) {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined) {
-      continue;
-    }
-
-    params.set(key, String(value));
-  }
-
-  const serialized = params.toString();
-
-  return serialized ? `?${serialized}` : '';
 }

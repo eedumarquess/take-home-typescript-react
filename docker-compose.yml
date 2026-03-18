@@ -41,7 +41,7 @@ services:
       [
         'sh',
         '-c',
-        'npx prisma db push --schema backend/prisma/schema.prisma && npx ts-node backend/prisma/seed.ts',
+        'cd backend && npx prisma migrate deploy && npx prisma db seed',
       ]
     restart: 'no'
 

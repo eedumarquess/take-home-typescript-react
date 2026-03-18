@@ -3,7 +3,7 @@ import { Controller, Get, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
-import type { RefreshSession, User } from '@prisma/client';
+import { Prisma, type RefreshSession, type User } from '@prisma/client';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/bootstrap/configure-app';
 import { Public } from '../../src/common/decorators/public.decorator';
@@ -126,6 +126,83 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
           return Promise.resolve(session);
         },
       ),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: {
+            expiresAt?: { gt?: Date };
+            revokedAt?: null;
+            tokenId?: string;
+            userId?: string;
+          };
+          data: Partial<RefreshSession>;
+        }) => {
+          const matchingSessions = stores.refreshSessions.filter((session) => {
+            if (where.tokenId && session.tokenId !== where.tokenId) {
+              return false;
+            }
+
+            if (where.userId && session.userId !== where.userId) {
+              return false;
+            }
+
+            if (where.revokedAt === null && session.revokedAt !== null) {
+              return false;
+            }
+
+            if (where.expiresAt?.gt && session.expiresAt <= where.expiresAt.gt) {
+              return false;
+            }
+
+            return true;
+          });
+
+          for (const session of matchingSessions) {
+            Object.assign(session, data);
+          }
+
+          return Promise.resolve({ count: matchingSessions.length });
+        },
+      ),
+      deleteMany: jest.fn(
+        ({
+          where,
+        }: {
+          where?: {
+            OR?: Array<{ expiresAt?: { lte?: Date }; revokedAt?: { not: null } }>;
+            userId?: string;
+          };
+        }) => {
+          const previousLength = stores.refreshSessions.length;
+
+          stores.refreshSessions = stores.refreshSessions.filter((session) => {
+            if (where?.userId && session.userId !== where.userId) {
+              return true;
+            }
+
+            const matchesOr =
+              where?.OR?.some((condition) => {
+                if (condition.expiresAt?.lte && session.expiresAt <= condition.expiresAt.lte) {
+                  return true;
+                }
+
+                if (condition.revokedAt?.not === null && session.revokedAt !== null) {
+                  return true;
+                }
+
+                return false;
+              }) ?? false;
+
+            return !matchesOr;
+          });
+
+          return Promise.resolve({
+            count: previousLength - stores.refreshSessions.length,
+          });
+        },
+      ),
     },
     user: {
       findUnique: jest.fn(({ where }: { where: { email?: string; id?: string } }) =>
@@ -143,6 +220,41 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
           }) ?? null,
         ),
       ),
+      findFirst: jest.fn(
+        ({
+          where,
+        }: {
+          where: {
+            email?: {
+              equals?: string;
+              mode?: string;
+            };
+          };
+        }) =>
+          Promise.resolve(
+            stores.users.find((user) => {
+              if (where.email?.equals) {
+                return user.email.toLowerCase() === where.email.equals.toLowerCase();
+              }
+
+              return false;
+            }) ?? null,
+          ),
+      ),
+    },
+    order: {
+      aggregate: jest.fn().mockResolvedValue({
+        _count: { _all: 0 },
+        _max: { createdAt: null, deliveredAt: null },
+        _min: { createdAt: null, deliveredAt: null },
+        _sum: { totalAmount: new Prisma.Decimal('0') },
+      }),
+      count: jest.fn().mockResolvedValue(0),
+      findUnique: jest.fn().mockResolvedValue(null),
+      findUniqueOrThrow: jest.fn().mockRejectedValue(new Error('Not found')),
+      findMany: jest.fn().mockResolvedValue([]),
+      groupBy: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
   };
   prismaMock = {

@@ -40,4 +40,87 @@ export class PrismaRefreshSessionRepository implements IRefreshSessionRepository
       where: { tokenId: input.tokenId },
     });
   }
+
+  async revokeIfActive(input: { tokenId: string; revokedAt: Date; replacedByTokenId?: string }) {
+    const result = await this.prismaService.refreshSession.updateMany({
+      data: {
+        replacedByTokenId: input.replacedByTokenId ?? null,
+        revokedAt: input.revokedAt,
+      },
+      where: {
+        expiresAt: {
+          gt: input.revokedAt,
+        },
+        revokedAt: null,
+        tokenId: input.tokenId,
+      },
+    });
+
+    return result.count === 1;
+  }
+
+  async rotate(input: {
+    currentTokenId: string;
+    userId: string;
+    revokedAt: Date;
+    replacementTokenId: string;
+    replacementExpiresAt: Date;
+  }) {
+    const revokedCount = await this.prismaService.$transaction(async (transaction) => {
+      const revokedSession = await transaction.refreshSession.updateMany({
+        data: {
+          replacedByTokenId: input.replacementTokenId,
+          revokedAt: input.revokedAt,
+        },
+        where: {
+          expiresAt: {
+            gt: input.revokedAt,
+          },
+          revokedAt: null,
+          tokenId: input.currentTokenId,
+          userId: input.userId,
+        },
+      });
+
+      if (revokedSession.count !== 1) {
+        return 0;
+      }
+
+      await transaction.refreshSession.create({
+        data: {
+          expiresAt: input.replacementExpiresAt,
+          tokenId: input.replacementTokenId,
+          userId: input.userId,
+        },
+      });
+
+      return revokedSession.count;
+    });
+
+    return revokedCount === 1;
+  }
+
+  cleanupExpiredAndRevoked(input?: { userId?: string; now?: Date }) {
+    const now = input?.now ?? new Date();
+
+    return this.prismaService.refreshSession
+      .deleteMany({
+        where: {
+          OR: [
+            {
+              expiresAt: {
+                lte: now,
+              },
+            },
+            {
+              revokedAt: {
+                not: null,
+              },
+            },
+          ],
+          userId: input?.userId,
+        },
+      })
+      .then((result) => result.count);
+  }
 }

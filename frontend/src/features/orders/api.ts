@@ -1,4 +1,5 @@
 import { requestJson } from '../../services/api';
+import { buildQueryString } from '../../services/query-string';
 import type {
   CreateOrderInput,
   OptimizationResult,
@@ -41,20 +42,4 @@ export async function optimizeAssignment() {
   return requestJson<OptimizationResult>('/orders/optimize-assignment', {
     method: 'POST',
   });
-}
-
-function buildQueryString(query: OrderListQuery) {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === '') {
-      continue;
-    }
-
-    params.set(key, String(value));
-  }
-
-  const serialized = params.toString();
-
-  return serialized ? `?${serialized}` : '';
 }

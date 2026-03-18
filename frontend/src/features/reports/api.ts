@@ -1,4 +1,5 @@
 import { requestJson } from '../../services/api';
+import { buildQueryString } from '../../services/query-string';
 import type {
   AverageDeliveryTimeReport,
   OrdersByStatusReport,
@@ -23,20 +24,4 @@ export async function getAverageDeliveryTimeReport(query: ReportDateRangeQuery =
   return requestJson<AverageDeliveryTimeReport>(
     `/reports/average-delivery-time${buildQueryString(query)}`,
   );
-}
-
-function buildQueryString(query: Record<string, string | number | undefined>) {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === '') {
-      continue;
-    }
-
-    params.set(key, String(value));
-  }
-
-  const serialized = params.toString();
-
-  return serialized ? `?${serialized}` : '';
 }

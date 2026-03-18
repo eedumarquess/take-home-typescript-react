@@ -1,7 +1,7 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, startTransition, useEffect, useState } from 'react';
 import { useAuth } from '../features/auth/auth-context';
 import { listDeliveryPersons } from '../features/delivery-persons/api';
-import type { DeliveryPerson } from '../features/delivery-persons/types';
 import {
   assignDeliveryPerson,
   createOrder,
@@ -18,8 +18,8 @@ import type {
   OrderStatus,
 } from '../features/orders/types';
 import { listProducts } from '../features/products/api';
-import type { Product } from '../features/products/types';
 import { ApiError } from '../services/api';
+import { formatApiError } from '../services/error-details';
 
 type OrderDraftItem = {
   id: string;
@@ -86,7 +86,6 @@ const actionLabel: Record<OrderStatus, string> = {
 export function OrdersPage() {
   const { user } = useAuth();
   const canWrite = user?.role === 'admin';
-  const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -97,141 +96,168 @@ export function OrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [draft, setDraft] = useState<OrderFormState>(emptyDraft);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
   const [selectedDeliveryPersonId, setSelectedDeliveryPersonId] = useState('');
   const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
-  const [pagination, setPagination] = useState({
+  const [isApplyingSuggestion, setIsApplyingSuggestion] = useState<string | 'all' | null>(null);
+  const [filtersError, setFiltersError] = useState<string | null>(null);
+  const [optimizationError, setOptimizationError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const [isPageVisible, setIsPageVisible] = useState(
+    typeof document === 'undefined' ? true : document.visibilityState === 'visible',
+  );
+  const queryClient = useQueryClient();
+  const dateRangeError = validateDateRange(startDate, endDate);
+  const ordersQuery = useQuery({
+    queryKey: ['orders', { endDate, page, sortBy, sortOrder, startDate, statusFilter }],
+    queryFn: () =>
+      listOrders({
+        endDate: endDate || undefined,
+        page,
+        sortBy,
+        sortOrder,
+        startDate: startDate || undefined,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+      }),
+    enabled: dateRangeError === null,
+    refetchInterval: isPageVisible ? 30000 : false,
+  });
+  const productsQuery = useQuery({
+    queryKey: ['products', 'available-for-order'],
+    queryFn: () =>
+      listProducts({
+        isAvailable: true,
+        limit: 100,
+        sortBy: 'name',
+        sortOrder: 'asc',
+      }),
+    enabled: canWrite,
+  });
+  const selectedOrderQuery = useQuery({
+    queryKey: ['orders', 'detail', selectedOrderId],
+    queryFn: () => getOrder(selectedOrderId as string),
+    enabled: panelMode === 'detail' && selectedOrderId !== null,
+  });
+  const deliveryPersonsQuery = useQuery({
+    queryKey: ['delivery-persons', 'available', selectedOrder?.id],
+    queryFn: () =>
+      listDeliveryPersons({
+        available: true,
+        isActive: true,
+      }),
+    enabled: canWrite && panelMode === 'detail' && selectedOrder?.status === 'ready',
+  });
+  const createOrderMutation = useMutation({
+    mutationFn: (payload: CreateOrderInput) => createOrder(payload),
+    onSuccess: async (createdOrder) => {
+      setPanelMode('detail');
+      setSelectedOrderId(createdOrder.id);
+      setSelectedOrder(createdOrder);
+      setDraft(emptyDraft);
+      setOptimizationError(null);
+      setOptimizationResult(null);
+      setFeedback({
+        text: 'Pedido criado com sucesso.',
+        tone: 'success',
+      });
+      startTransition(() => {
+        setPage(1);
+      });
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
+      updateOrderStatus(id, status),
+    onSuccess: async (updatedOrder) => {
+      setSelectedOrder(updatedOrder);
+      setOptimizationError(null);
+      setOptimizationResult(null);
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['orders', 'detail', updatedOrder.id] });
+    },
+  });
+  const assignDeliveryPersonMutation = useMutation({
+    mutationFn: ({ id, deliveryPersonId }: { id: string; deliveryPersonId: string }) =>
+      assignDeliveryPerson(id, deliveryPersonId),
+    onSuccess: async (updatedOrder) => {
+      setSelectedOrder(updatedOrder);
+      setSelectedDeliveryPersonId(updatedOrder.deliveryPerson?.id ?? '');
+      setOptimizationError(null);
+      setOptimizationResult(null);
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['orders', 'detail', updatedOrder.id] });
+      await queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
+    },
+  });
+  const optimizeAssignmentMutation = useMutation({
+    mutationFn: optimizeAssignment,
+    onSuccess: (result) => {
+      setOptimizationResult(result);
+    },
+  });
+  const orders = ordersQuery.data?.data ?? [];
+  const pagination = ordersQuery.data?.pagination ?? {
     limit: 20,
     page: 1,
     total: 0,
     totalPages: 0,
-  });
-  const [refreshNonce, setRefreshNonce] = useState(0);
-  const [isListLoading, setIsListLoading] = useState(true);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [isProductsLoading, setIsProductsLoading] = useState(false);
-  const [isDeliveryPersonsLoading, setIsDeliveryPersonsLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isOptimizationLoading, setIsOptimizationLoading] = useState(false);
-  const [isApplyingSuggestion, setIsApplyingSuggestion] = useState<string | 'all' | null>(null);
-  const [listError, setListError] = useState<string | null>(null);
-  const [optimizationError, setOptimizationError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<FeedbackState>(null);
+  };
+  const products = productsQuery.data?.data ?? [];
+  const deliveryPersons = deliveryPersonsQuery.data?.data ?? [];
+  const isListLoading = ordersQuery.isLoading;
+  const isDetailLoading = selectedOrderQuery.isLoading;
+  const isProductsLoading = productsQuery.isLoading;
+  const isDeliveryPersonsLoading = deliveryPersonsQuery.isLoading;
+  const isSubmitting =
+    createOrderMutation.isPending ||
+    updateStatusMutation.isPending ||
+    assignDeliveryPersonMutation.isPending;
+  const isOptimizationLoading = optimizeAssignmentMutation.isPending;
+  const listError = ordersQuery.error
+    ? formatApiError(ordersQuery.error, 'Nao foi possivel carregar os pedidos.')
+    : null;
 
   useEffect(() => {
-    const reloadToken = refreshNonce;
-
-    async function run() {
-      if (reloadToken < 0) {
-        return;
-      }
-
-      setIsListLoading(true);
-      setListError(null);
-
-      try {
-        const response = await listOrders({
-          endDate: endDate || undefined,
-          page,
-          sortBy,
-          sortOrder,
-          startDate: startDate || undefined,
-          status: statusFilter === 'all' ? undefined : statusFilter,
-        });
-        setOrders(response.data);
-        setPagination(response.pagination);
-      } catch (error) {
-        setOrders([]);
-        setPagination((current) => ({ ...current, total: 0, totalPages: 0 }));
-        setListError(toOrderErrorMessage(error, 'Nao foi possivel carregar os pedidos.'));
-      } finally {
-        setIsListLoading(false);
-      }
+    function handleVisibilityChange() {
+      setIsPageVisible(document.visibilityState === 'visible');
     }
 
-    void run();
-  }, [endDate, page, refreshNonce, sortBy, sortOrder, startDate, statusFilter]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
-    if (!canWrite) {
+    if (!selectedOrderQuery.data) {
       return;
     }
 
-    async function run() {
-      setIsProductsLoading(true);
-
-      try {
-        const response = await listProducts({
-          isAvailable: true,
-          limit: 100,
-          sortBy: 'name',
-          sortOrder: 'asc',
-        });
-        setProducts(response.data);
-      } catch {
-        setProducts([]);
-      } finally {
-        setIsProductsLoading(false);
-      }
-    }
-
-    void run();
-  }, [canWrite]);
+    setSelectedOrder(selectedOrderQuery.data);
+  }, [selectedOrderQuery.data]);
 
   useEffect(() => {
     setSelectedDeliveryPersonId(selectedOrder?.deliveryPerson?.id ?? '');
   }, [selectedOrder]);
 
   useEffect(() => {
-    if (!canWrite || panelMode !== 'detail' || selectedOrder?.status !== 'ready') {
-      setDeliveryPersons([]);
+    if (panelMode !== 'detail' || !selectedOrderId) {
       return;
     }
 
-    const reloadToken = refreshNonce;
-    const selectedOrderIdSnapshot = selectedOrder.id;
+    const selectedOrderIsVisible = orders.some((order) => order.id === selectedOrderId);
 
-    async function run() {
-      if (reloadToken < 0 || !selectedOrderIdSnapshot) {
-        return;
-      }
-
-      setIsDeliveryPersonsLoading(true);
-
-      try {
-        const response = await listDeliveryPersons({
-          available: true,
-          isActive: true,
-        });
-        setDeliveryPersons(response.data);
-      } catch {
-        setDeliveryPersons([]);
-      } finally {
-        setIsDeliveryPersonsLoading(false);
-      }
+    if (!selectedOrderIsVisible) {
+      setSelectedOrderId(null);
+      setSelectedOrder(null);
     }
-
-    void run();
-  }, [canWrite, panelMode, refreshNonce, selectedOrder?.id, selectedOrder?.status]);
+  }, [orders, panelMode, selectedOrderId]);
 
   async function handleOpenOrder(orderId: string) {
     setPanelMode('detail');
     setSelectedOrderId(orderId);
     setFeedback(null);
-    setIsDetailLoading(true);
-
-    try {
-      setSelectedOrder(await getOrder(orderId));
-    } catch (error) {
-      setSelectedOrder(null);
-      setFeedback({
-        text: toOrderErrorMessage(error, 'Nao foi possivel carregar o detalhe do pedido.'),
-        tone: 'error',
-      });
-    } finally {
-      setIsDetailLoading(false);
-    }
+    setSelectedOrder(orders.find((order) => order.id === orderId) ?? null);
   }
 
   function handleStartCreate() {
@@ -248,6 +274,12 @@ export function OrdersPage() {
 
   async function handleCreateOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const nextFiltersError = dateRangeError;
+
+    if (nextFiltersError) {
+      setFiltersError(nextFiltersError);
+      return;
+    }
 
     const validationMessage = validateDraft(draft);
 
@@ -259,32 +291,15 @@ export function OrdersPage() {
       return;
     }
 
-    setIsSubmitting(true);
     setFeedback(null);
 
     try {
-      const createdOrder = await createOrder(toCreateOrderPayload(draft));
-      setPanelMode('detail');
-      setSelectedOrderId(createdOrder.id);
-      setSelectedOrder(createdOrder);
-      setDraft(emptyDraft);
-      setOptimizationError(null);
-      setOptimizationResult(null);
-      setFeedback({
-        text: 'Pedido criado com sucesso.',
-        tone: 'success',
-      });
-      startTransition(() => {
-        setPage(1);
-      });
-      setRefreshNonce((current) => current + 1);
+      await createOrderMutation.mutateAsync(toCreateOrderPayload(draft));
     } catch (error) {
       setFeedback({
         text: toOrderErrorMessage(error, 'Nao foi possivel criar o pedido.'),
         tone: 'error',
       });
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -293,26 +308,19 @@ export function OrdersPage() {
       return;
     }
 
-    setIsSubmitting(true);
     setFeedback(null);
 
     try {
-      const updatedOrder = await updateOrderStatus(selectedOrderId, status);
-      setSelectedOrder(updatedOrder);
-      setOptimizationError(null);
-      setOptimizationResult(null);
+      await updateStatusMutation.mutateAsync({ id: selectedOrderId, status });
       setFeedback({
         text: `Pedido atualizado para ${statusLabel[status]}.`,
         tone: 'success',
       });
-      setRefreshNonce((current) => current + 1);
     } catch (error) {
       setFeedback({
         text: toOrderErrorMessage(error, 'Nao foi possivel atualizar o status do pedido.'),
         tone: 'error',
       });
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -325,43 +333,35 @@ export function OrdersPage() {
       return;
     }
 
-    setIsSubmitting(true);
     setFeedback(null);
 
     try {
-      const updatedOrder = await assignDeliveryPerson(selectedOrderId, selectedDeliveryPersonId);
-      setSelectedOrder(updatedOrder);
-      setOptimizationError(null);
-      setOptimizationResult(null);
+      await assignDeliveryPersonMutation.mutateAsync({
+        deliveryPersonId: selectedDeliveryPersonId,
+        id: selectedOrderId,
+      });
       setFeedback({
         text: 'Entregador atribuido com sucesso.',
         tone: 'success',
       });
-      setRefreshNonce((current) => current + 1);
     } catch (error) {
       setFeedback({
         text: toOrderErrorMessage(error, 'Nao foi possivel atribuir o entregador.'),
         tone: 'error',
       });
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
   async function handleLoadOptimization() {
-    setIsOptimizationLoading(true);
     setOptimizationError(null);
 
     try {
-      const result = await optimizeAssignment();
-      setOptimizationResult(result);
+      await optimizeAssignmentMutation.mutateAsync();
     } catch (error) {
       setOptimizationResult(null);
       setOptimizationError(
         toOrderErrorMessage(error, 'Nao foi possivel carregar a sugestao otimizada.'),
       );
-    } finally {
-      setIsOptimizationLoading(false);
     }
   }
 
@@ -375,7 +375,6 @@ export function OrdersPage() {
         text: `Sugestao aplicada para ${updatedOrder.customerName}.`,
         tone: 'success',
       });
-      setRefreshNonce((current) => current + 1);
     } catch (error) {
       const message = toOrderErrorMessage(error, 'Nao foi possivel aplicar a sugestao otimizada.');
 
@@ -415,10 +414,6 @@ export function OrdersPage() {
       }
     }
 
-    if (successCount > 0) {
-      setRefreshNonce((current) => current + 1);
-    }
-
     if (failures.length === 0) {
       setFeedback({
         text: `${successCount} sugestoes aplicadas com sucesso.`,
@@ -437,8 +432,14 @@ export function OrdersPage() {
   }
 
   async function applyOptimizationSuggestion(suggestion: OptimizationAssignment) {
-    await assignDeliveryPerson(suggestion.orderId, suggestion.deliveryPersonId);
-    const updatedOrder = await updateOrderStatus(suggestion.orderId, 'delivering');
+    await assignDeliveryPersonMutation.mutateAsync({
+      deliveryPersonId: suggestion.deliveryPersonId,
+      id: suggestion.orderId,
+    });
+    const updatedOrder = await updateStatusMutation.mutateAsync({
+      id: suggestion.orderId,
+      status: 'delivering',
+    });
 
     setOptimizationResult((current) => removeOptimizationSuggestion(current, suggestion.orderId));
 
@@ -510,7 +511,9 @@ export function OrdersPage() {
                 <span>Inicio</span>
                 <input
                   onChange={(event) => {
-                    setStartDate(event.target.value);
+                    const nextStartDate = event.target.value;
+                    setStartDate(nextStartDate);
+                    setFiltersError(validateDateRange(nextStartDate, endDate));
                     startTransition(() => {
                       setPage(1);
                     });
@@ -526,7 +529,9 @@ export function OrdersPage() {
                 <span>Fim</span>
                 <input
                   onChange={(event) => {
-                    setEndDate(event.target.value);
+                    const nextEndDate = event.target.value;
+                    setEndDate(nextEndDate);
+                    setFiltersError(validateDateRange(startDate, nextEndDate));
                     startTransition(() => {
                       setPage(1);
                     });
@@ -566,6 +571,12 @@ export function OrdersPage() {
               </label>
             </div>
           </div>
+
+          {filtersError ? (
+            <div className="inline-feedback inline-feedback--error" role="alert">
+              {filtersError}
+            </div>
+          ) : null}
 
           {canWrite ? (
             <section className="optimization-console">
@@ -1294,10 +1305,25 @@ function removeOptimizationSuggestion(result: OptimizationResult | null, orderId
     return result;
   }
 
+  const nextAssignments = result.assignments.filter((assignment) => assignment.orderId !== orderId);
+
   return {
     ...result,
-    assignments: result.assignments.filter((assignment) => assignment.orderId !== orderId),
+    assignments: nextAssignments,
+    totalDistanceKm: Number(
+      nextAssignments
+        .reduce((sum, assignment) => sum + assignment.estimatedDistanceKm, 0)
+        .toFixed(2),
+    ),
   };
+}
+
+function validateDateRange(startDate: string, endDate: string) {
+  if (startDate && endDate && startDate > endDate) {
+    return 'A data inicial nao pode ser maior que a data final.';
+  }
+
+  return null;
 }
 
 function toOrderErrorMessage(error: unknown, fallback: string) {

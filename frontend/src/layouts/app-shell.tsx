@@ -10,13 +10,12 @@ const navigationItems = [
   { to: '/reports', label: 'Relatorios', note: 'analytics' },
 ];
 
-const formattedToday = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'full',
-}).format(new Date());
-
 export function AppShell() {
   const { user, signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const formattedToday = new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'full',
+  }).format(new Date());
   const visibleNavigationItems = navigationItems.filter(
     (item) => !item.adminOnly || user?.role === 'admin',
   );

@@ -3,6 +3,10 @@ import request from 'supertest';
 import { AppRole } from '../src/common/enums/app-role.enum';
 import { createTestApp } from './support/create-test-app';
 
+const readyOrderId = '550e8400-e29b-41d4-a716-446655440001';
+const preparingOrderId = '550e8400-e29b-41d4-a716-446655440002';
+const missingOrderId = '550e8400-e29b-41d4-a716-446655440099';
+
 describe('Orders (e2e)', () => {
   it('allows viewers to list orders and returns paginated data', async () => {
     const { app, issueAccessToken } = await createTestApp({
@@ -93,7 +97,7 @@ describe('Orders (e2e)', () => {
     });
 
     await request(app.getHttpServer())
-      .get('/api/orders/missing-order')
+      .get(`/api/orders/${missingOrderId}`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(404)
       .expect({
@@ -120,7 +124,7 @@ describe('Orders (e2e)', () => {
     });
 
     await request(app.getHttpServer())
-      .patch('/api/orders/order-ready/status')
+      .patch(`/api/orders/${readyOrderId}/status`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         status: 'delivering',
@@ -151,7 +155,7 @@ describe('Orders (e2e)', () => {
     });
 
     await request(app.getHttpServer())
-      .patch('/api/orders/order-preparing/assign')
+      .patch(`/api/orders/${preparingOrderId}/assign`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         deliveryPersonId: '550e8400-e29b-41d4-a716-446655440050',
@@ -174,11 +178,11 @@ function createOrdersPrismaOverrides(
 ) {
   const readyOrder = buildOrder({
     deliveryPersonId: options.readyOrderWithoutDeliveryPerson ? null : 'delivery-1',
-    id: 'order-ready',
+    id: readyOrderId,
     status: OrderStatus.READY,
   });
   const preparingOrder = buildOrder({
-    id: 'order-preparing',
+    id: preparingOrderId,
     status: OrderStatus.PREPARING,
   });
   const orders = [readyOrder];

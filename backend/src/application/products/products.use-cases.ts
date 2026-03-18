@@ -20,6 +20,8 @@ type SaveProductCommand = {
   preparationTime: number;
 };
 
+type PatchProductCommand = Partial<SaveProductCommand>;
+
 @Injectable()
 export class ListProductsUseCase {
   constructor(private readonly productsRepository: IProductRepository) {}
@@ -88,6 +90,38 @@ export class UpdateProductUseCase {
 }
 
 @Injectable()
+export class PatchProductUseCase {
+  constructor(private readonly productsRepository: IProductRepository) {}
+
+  async execute(id: string, input: PatchProductCommand) {
+    const product = await this.productsRepository.findById(id);
+
+    if (!product) {
+      throw productNotFound();
+    }
+
+    const currentProduct = product.toPrimitives();
+    const nextProduct = {
+      category: input.category ?? currentProduct.category,
+      description: input.description ?? currentProduct.description,
+      imageUrl: input.imageUrl ?? currentProduct.imageUrl ?? undefined,
+      isAvailable: input.isAvailable ?? currentProduct.isAvailable,
+      name: input.name ?? currentProduct.name,
+      preparationTime: input.preparationTime ?? currentProduct.preparationTime,
+      price: input.price ?? currentProduct.price.toNumber(),
+    };
+
+    product.update(toProductDraft(nextProduct));
+    const updatedProduct = await this.productsRepository.update(
+      id,
+      toSaveProductInput(nextProduct),
+    );
+
+    return toProductResponse(updatedProduct);
+  }
+}
+
+@Injectable()
 export class DeleteProductUseCase {
   constructor(private readonly productsRepository: IProductRepository) {}
 
@@ -124,7 +158,16 @@ export class ToggleAvailabilityUseCase {
       throw productNotFound();
     }
 
-    const nextProduct = isAvailable ? product : product.deactivate();
+    const currentProduct = product.toPrimitives();
+    const nextProduct = product.update({
+      category: currentProduct.category,
+      description: currentProduct.description,
+      imageUrl: currentProduct.imageUrl,
+      isAvailable,
+      name: currentProduct.name,
+      preparationTime: currentProduct.preparationTime,
+      price: currentProduct.price,
+    });
     const updatedProduct = await this.productsRepository.update(id, {
       category: nextProduct.toPrimitives().category,
       description: nextProduct.toPrimitives().description,

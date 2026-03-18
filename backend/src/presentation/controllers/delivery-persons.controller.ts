@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   CreateDeliveryPersonUseCase,
   DeleteDeliveryPersonUseCase,
@@ -32,13 +44,16 @@ export class DeliveryPersonsController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() body: UpdateDeliveryPersonDto) {
+  update(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: UpdateDeliveryPersonDto,
+  ) {
     return this.updateDeliveryPersonUseCase.execute(id, body);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     await this.deleteDeliveryPersonUseCase.execute(id);
   }
 }

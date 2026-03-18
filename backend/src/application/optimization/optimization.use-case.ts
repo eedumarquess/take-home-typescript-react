@@ -34,9 +34,14 @@ export class OptimizeAssignmentUseCase {
             name: deliveryPerson.toPrimitives().name,
           },
         ];
-      });
+      })
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const sortedReadyOrders = [...readyOrders].sort(
+      (left, right) =>
+        left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id),
+    );
 
-    if (readyOrders.length === 0) {
+    if (sortedReadyOrders.length === 0) {
       return {
         algorithm: 'hungarian',
         assignments: [],
@@ -52,7 +57,7 @@ export class OptimizeAssignmentUseCase {
         assignments: [],
         executionTimeMs: Math.max(1, Math.round(performance.now() - startedAt)),
         totalDistanceKm: 0,
-        unassigned: readyOrders.map((order) => ({
+        unassigned: sortedReadyOrders.map((order) => ({
           orderAddress: order.deliveryAddress,
           orderId: order.id,
           reason: 'No available delivery person',
@@ -61,8 +66,9 @@ export class OptimizeAssignmentUseCase {
     }
 
     const result = this.assignmentAlgorithm.optimize(
-      readyOrders.map((order) => ({
+      sortedReadyOrders.map((order) => ({
         coordinates: order.coordinates,
+        createdAt: order.createdAt,
         deliveryAddress: order.deliveryAddress,
         id: order.id,
       })),

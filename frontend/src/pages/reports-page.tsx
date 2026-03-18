@@ -1,11 +1,5 @@
-import {
-  type CSSProperties,
-  type FormEvent,
-  startTransition,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useQueries } from '@tanstack/react-query';
+import { type CSSProperties, type FormEvent, startTransition, useState } from 'react';
 import {
   getAverageDeliveryTimeReport,
   getOrdersByStatusReport,
@@ -17,20 +11,12 @@ import type {
   OrdersByStatusReport,
   ReportDateRangeQuery,
   RevenueReport,
-  TopProductsReport,
 } from '../features/reports/types';
-import { ApiError } from '../services/api';
+import { formatApiError } from '../services/error-details';
 
 type FiltersState = {
   startDate: string;
   endDate: string;
-};
-
-type ReportsDashboardState = {
-  averageDeliveryTime: AverageDeliveryTimeReport;
-  ordersByStatus: OrdersByStatusReport;
-  revenue: RevenueReport;
-  topProducts: TopProductsReport;
 };
 
 const emptyFilters: FiltersState = {
@@ -50,76 +36,75 @@ const statusToneClassName: Record<string, string> = {
 export function ReportsPage() {
   const [draftFilters, setDraftFilters] = useState<FiltersState>(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState<FiltersState>(emptyFilters);
-  const [dashboard, setDashboard] = useState<ReportsDashboardState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [reloadNonce, setReloadNonce] = useState(0);
-  const hasLoadedDashboardRef = useRef(false);
-
-  useEffect(() => {
-    let isActive = true;
-    const requestVersion = reloadNonce;
-
-    async function run() {
-      if (requestVersion < 0) {
-        return;
-      }
-
-      const initialLoad = !hasLoadedDashboardRef.current;
-
-      if (initialLoad) {
-        setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
-
-      setError(null);
-
-      try {
-        const query = toQuery(appliedFilters);
-        const [revenue, ordersByStatus, topProducts, averageDeliveryTime] = await Promise.all([
-          getRevenueReport(query),
-          getOrdersByStatusReport(query),
-          getTopProductsReport({ ...query, limit: 10 }),
-          getAverageDeliveryTimeReport(query),
-        ]);
-
-        if (!isActive) {
-          return;
+  const [filtersError, setFiltersError] = useState<string | null>(null);
+  const query = toQuery(appliedFilters);
+  const [revenueQuery, ordersByStatusQuery, topProductsQuery, averageDeliveryTimeQuery] =
+    useQueries({
+      queries: [
+        {
+          queryKey: ['reports', 'revenue', query],
+          queryFn: () => getRevenueReport(query),
+        },
+        {
+          queryKey: ['reports', 'orders-by-status', query],
+          queryFn: () => getOrdersByStatusReport(query),
+        },
+        {
+          queryKey: ['reports', 'top-products', query],
+          queryFn: () => getTopProductsReport({ ...query, limit: 10 }),
+        },
+        {
+          queryKey: ['reports', 'average-delivery-time', query],
+          queryFn: () => getAverageDeliveryTimeReport(query),
+        },
+      ],
+    });
+  const dashboard =
+    revenueQuery.data &&
+    ordersByStatusQuery.data &&
+    topProductsQuery.data &&
+    averageDeliveryTimeQuery.data
+      ? {
+          averageDeliveryTime: averageDeliveryTimeQuery.data,
+          ordersByStatus: ordersByStatusQuery.data,
+          revenue: revenueQuery.data,
+          topProducts: topProductsQuery.data,
         }
-
-        setDashboard({
-          averageDeliveryTime,
-          ordersByStatus,
-          revenue,
-          topProducts,
-        });
-        hasLoadedDashboardRef.current = true;
-      } catch (requestError) {
-        if (!isActive) {
-          return;
-        }
-
-        setError(toReportsErrorMessage(requestError, 'Nao foi possivel carregar os relatorios.'));
-        hasLoadedDashboardRef.current = true;
-      } finally {
-        if (isActive) {
-          setIsLoading(false);
-          setIsRefreshing(false);
-        }
-      }
-    }
-
-    void run();
-
-    return () => {
-      isActive = false;
-    };
-  }, [appliedFilters, reloadNonce]);
+      : null;
+  const isLoading =
+    revenueQuery.isLoading ||
+    ordersByStatusQuery.isLoading ||
+    topProductsQuery.isLoading ||
+    averageDeliveryTimeQuery.isLoading;
+  const isRefreshing =
+    revenueQuery.isFetching ||
+    ordersByStatusQuery.isFetching ||
+    topProductsQuery.isFetching ||
+    averageDeliveryTimeQuery.isFetching;
+  const error =
+    revenueQuery.error ||
+    ordersByStatusQuery.error ||
+    topProductsQuery.error ||
+    averageDeliveryTimeQuery.error
+      ? formatApiError(
+          revenueQuery.error ??
+            ordersByStatusQuery.error ??
+            topProductsQuery.error ??
+            averageDeliveryTimeQuery.error,
+          'Nao foi possivel carregar os relatorios.',
+        )
+      : null;
 
   function handleApplyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const validationError = validateFilters(draftFilters);
+
+    if (validationError) {
+      setFiltersError(validationError);
+      return;
+    }
+
+    setFiltersError(null);
     startTransition(() => {
       setAppliedFilters(draftFilters);
     });
@@ -127,6 +112,7 @@ export function ReportsPage() {
 
   function handleResetFilters() {
     setDraftFilters(emptyFilters);
+    setFiltersError(null);
     startTransition(() => {
       setAppliedFilters(emptyFilters);
     });
@@ -202,17 +188,16 @@ export function ReportsPage() {
         </div>
       </form>
 
+      {filtersError ? (
+        <div className="inline-feedback inline-feedback--error" role="alert">
+          {filtersError}
+        </div>
+      ) : null}
+
       {error && dashboard === null ? (
         <div className="sheet empty-state empty-state--error" role="alert">
           <strong>Falha ao montar o painel analitico.</strong>
           <p>{error}</p>
-          <button
-            className="button button--ghost button--small"
-            onClick={() => setReloadNonce((current) => current + 1)}
-            type="button"
-          >
-            Tentar novamente
-          </button>
         </div>
       ) : isLoading || dashboard === null ? (
         <div className="sheet empty-state">
@@ -412,6 +397,14 @@ function describeAppliedPeriod(filters: FiltersState) {
     : `Ate ${formatShortDate(filters.endDate)}`;
 }
 
+function validateFilters(filters: FiltersState) {
+  if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+    return 'A data inicial nao pode ser maior que a data final.';
+  }
+
+  return null;
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
     currency: 'BRL',
@@ -448,12 +441,4 @@ function formatVehicleType(
     case 'motorcycle':
       return 'Moto';
   }
-}
-
-function toReportsErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-
-  return error instanceof Error ? error.message : fallback;
 }

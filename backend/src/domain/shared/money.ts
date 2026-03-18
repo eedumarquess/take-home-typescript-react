@@ -1,18 +1,32 @@
 import { DomainError } from './domain-error';
 
 export class Money {
-  private constructor(private readonly amount: number) {}
+  private constructor(private readonly cents: number) {}
 
   static fromNumber(amount: number) {
     if (!Number.isFinite(amount) || amount < 0) {
       throw new DomainError('Valor monetario invalido', 'INVALID_MONEY');
     }
 
-    return new Money(roundToTwoDecimals(amount));
+    const cents = Math.round(amount * 100);
+
+    if (Math.abs(amount * 100 - cents) > Number.EPSILON) {
+      throw new DomainError('Valor monetario invalido', 'INVALID_MONEY');
+    }
+
+    return new Money(cents);
+  }
+
+  static fromCents(cents: number) {
+    if (!Number.isInteger(cents) || cents < 0) {
+      throw new DomainError('Valor monetario invalido', 'INVALID_MONEY');
+    }
+
+    return new Money(cents);
   }
 
   add(other: Money) {
-    return Money.fromNumber(this.amount + other.amount);
+    return Money.fromCents(this.cents + other.cents);
   }
 
   multiply(quantity: number) {
@@ -20,14 +34,14 @@ export class Money {
       throw new DomainError('Quantidade invalida para calculo monetario', 'INVALID_QUANTITY');
     }
 
-    return Money.fromNumber(this.amount * quantity);
+    return Money.fromCents(this.cents * quantity);
   }
 
   toNumber() {
-    return this.amount;
+    return this.cents / 100;
   }
-}
 
-function roundToTwoDecimals(value: number) {
-  return Math.round(value * 100) / 100;
+  toCents() {
+    return this.cents;
+  }
 }

@@ -42,16 +42,22 @@ npm install
 npm run prisma:generate --workspace backend
 ```
 
-3. Aplique o schema:
+3. Aplique as migrations versionadas:
 
 ```bash
-npm run db:push --workspace backend
+npm run db:migrate:deploy --workspace backend
 ```
 
 4. Popule o banco com a massa do desafio:
 
 ```bash
 npm run seed --workspace backend
+```
+
+Para criar uma nova migration de desenvolvimento:
+
+```bash
+npm run db:migrate:dev --workspace backend -- --name nome_da_migration
 ```
 
 ## Execucao
@@ -75,7 +81,8 @@ API publicada em `http://localhost:3001/api`.
 
 ```bash
 npm run prisma:generate --workspace backend
-npm run db:push --workspace backend
+npm run db:migrate:deploy --workspace backend
+npm run db:migrate:status --workspace backend
 npm run seed --workspace backend
 npm run test --workspace backend
 npm run test:e2e --workspace backend
@@ -83,17 +90,33 @@ npm run lint --workspace backend
 npm run typecheck --workspace backend
 ```
 
+## Contratos implementados
+
+- `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`
+- `/api/products` com `PATCH /:id` e `PATCH /:id/availability`
+- `/api/orders` com atribuicao, transicao de status e optimize-assignment
+- `/api/delivery-persons`
+- `/api/reports`
+
+Regras operacionais relevantes:
+
+- todos os `:id` publicos usam validacao UUID
+- filtros de data usam janelas locais de Sao Paulo
+- calculos monetarios de pedidos usam centavos internamente
+- refresh-token rotation e transacional
+- atribuicao de entregador e mudancas de status usam protecao de concorrencia otimista
+
 ## Testes
 
-- unitarios com Jest para services e guards
+- unitarios com Jest para regras de dominio, use cases e adaptadores
 - e2e HTTP com Jest em `backend/test/`
-- contratos principais cobertos para auth, produtos, pedidos, optimization e reports
+- cobertura dos fluxos principais de auth, produtos, pedidos, optimization e reports
 
 ## Docker
 
 O `docker-compose.yml` da raiz usa o `backend/Dockerfile` com dois alvos:
 
-- `tooling`: aplica `db push` e `seed`
+- `tooling`: aplica `prisma migrate deploy`, executa `seed` e prepara artefatos
 - `runtime`: publica a API em producao
 
 Subida completa a partir da raiz:

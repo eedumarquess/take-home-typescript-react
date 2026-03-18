@@ -6,35 +6,66 @@ import type {
   IAssignmentAlgorithm,
 } from '../../domain/optimization/assignment-algorithm';
 
+const MAX_ASSIGNMENT_DISTANCE_KM = 10;
+const DUMMY_ASSIGNMENT_COST = 1000;
+const UNASSIGNABLE_COST = 1000000;
+const ORDER_TIE_BREAK_WEIGHT = 1e-6;
+const DELIVERY_TIE_BREAK_WEIGHT = 1e-9;
+
 @Injectable()
 export class HungarianAssignmentAlgorithm implements IAssignmentAlgorithm {
   optimize(
     orders: AssignmentOrderCandidate[],
     deliveryPersons: AssignmentDeliveryPersonCandidate[],
   ): AssignmentResult {
-    const costMatrix = orders.map((order) =>
-      deliveryPersons.map((deliveryPerson) =>
+    const sortedOrders = [...orders].sort(
+      (left, right) =>
+        left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id),
+    );
+    const sortedDeliveryPersons = [...deliveryPersons].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+    const rawDistanceMatrix = sortedOrders.map((order) =>
+      sortedDeliveryPersons.map((deliveryPerson) =>
         order.coordinates.haversineDistanceTo(deliveryPerson.coordinates),
       ),
     );
-    const squareCostMatrix = toSquareMatrix(costMatrix);
+    const costMatrix = sortedOrders.map((_, orderIndex) => [
+      ...sortedDeliveryPersons.map((__, deliveryPersonIndex) =>
+        toAssignmentCost(
+          rawDistanceMatrix[orderIndex]?.[deliveryPersonIndex] ?? UNASSIGNABLE_COST,
+          {
+            deliveryPersonIndex,
+            orderIndex,
+          },
+        ),
+      ),
+      ...Array.from({ length: sortedOrders.length }, () => DUMMY_ASSIGNMENT_COST),
+    ]);
+    const squareCostMatrix = toSquareMatrix(costMatrix, DUMMY_ASSIGNMENT_COST);
     const assignmentIndexes = solveHungarian(squareCostMatrix);
     const assignments: AssignmentResult['assignments'] = [];
     const assignedOrderIds = new Set<string>();
 
     for (const [orderIndex, deliveryPersonIndex] of assignmentIndexes.entries()) {
-      if (deliveryPersonIndex < 0 || deliveryPersonIndex >= deliveryPersons.length) {
+      if (deliveryPersonIndex < 0 || deliveryPersonIndex >= sortedDeliveryPersons.length) {
         continue;
       }
 
-      const order = orders[orderIndex];
+      const order = sortedOrders[orderIndex];
 
       if (!order) {
         continue;
       }
 
-      const deliveryPerson = deliveryPersons[deliveryPersonIndex];
-      const estimatedDistanceKm = roundDistance(costMatrix[orderIndex]?.[deliveryPersonIndex] ?? 0);
+      const deliveryPerson = sortedDeliveryPersons[deliveryPersonIndex];
+      const estimatedDistanceKm = roundDistance(
+        rawDistanceMatrix[orderIndex]?.[deliveryPersonIndex] ?? UNASSIGNABLE_COST,
+      );
+
+      if (estimatedDistanceKm > MAX_ASSIGNMENT_DISTANCE_KM) {
+        continue;
+      }
 
       assignments.push({
         deliveryPersonId: deliveryPerson.id,
@@ -46,7 +77,14 @@ export class HungarianAssignmentAlgorithm implements IAssignmentAlgorithm {
       assignedOrderIds.add(order.id);
     }
 
-    const unassigned = orders
+    const orderedAssignments = assignments.sort(
+      (left, right) =>
+        left.estimatedDistanceKm - right.estimatedDistanceKm ||
+        (sortedOrders.find((order) => order.id === left.orderId)?.createdAt.getTime() ?? 0) -
+          (sortedOrders.find((order) => order.id === right.orderId)?.createdAt.getTime() ?? 0) ||
+        left.deliveryPersonId.localeCompare(right.deliveryPersonId),
+    );
+    const unassigned = sortedOrders
       .filter((order) => !assignedOrderIds.has(order.id))
       .map((order) => ({
         orderAddress: order.deliveryAddress,
@@ -55,25 +93,40 @@ export class HungarianAssignmentAlgorithm implements IAssignmentAlgorithm {
       }));
 
     return {
-      assignments,
+      assignments: orderedAssignments,
       totalDistanceKm: roundDistance(
-        assignments.reduce((sum, assignment) => sum + assignment.estimatedDistanceKm, 0),
+        orderedAssignments.reduce((sum, assignment) => sum + assignment.estimatedDistanceKm, 0),
       ),
       unassigned,
     };
   }
 }
 
-function toSquareMatrix(matrix: number[][]) {
+function toSquareMatrix(matrix: number[][], fillValue: number) {
   const size = Math.max(matrix.length, matrix[0]?.length ?? 0);
 
   return Array.from({ length: size }, (_, rowIndex) =>
-    Array.from({ length: size }, (_, columnIndex) => matrix[rowIndex]?.[columnIndex] ?? 0),
+    Array.from({ length: size }, (_, columnIndex) => matrix[rowIndex]?.[columnIndex] ?? fillValue),
   );
 }
 
 function roundDistance(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function toAssignmentCost(
+  distanceKm: number,
+  tieBreak: { orderIndex: number; deliveryPersonIndex: number },
+) {
+  if (distanceKm > MAX_ASSIGNMENT_DISTANCE_KM) {
+    return UNASSIGNABLE_COST;
+  }
+
+  return (
+    distanceKm +
+    tieBreak.orderIndex * ORDER_TIE_BREAK_WEIGHT +
+    tieBreak.deliveryPersonIndex * DELIVERY_TIE_BREAK_WEIGHT
+  );
 }
 
 function solveHungarian(costMatrix: number[][]) {

@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/auth-context';
 import {
   createDeliveryPerson,
@@ -11,7 +13,7 @@ import type {
   SaveDeliveryPersonInput,
   VehicleType,
 } from '../features/delivery-persons/types';
-import { ApiError } from '../services/api';
+import { formatApiError } from '../services/error-details';
 
 type DeliveryPersonFormState = {
   name: string;
@@ -50,73 +52,77 @@ export function DeliveryPersonsPage() {
   const isAdmin = user?.role === 'admin';
 
   if (!isAdmin) {
-    return (
-      <section className="page admin-page">
-        <header className="page-header admin-page__hero">
-          <div>
-            <p className="page-header__eyebrow">Fleet control</p>
-            <h1>Gestao de entregadores reservada ao perfil admin.</h1>
-            <p className="page-header__summary">
-              O backend fecha o acesso com RBAC e o frontend espelha essa restricao para evitar
-              fluxo morto no painel.
-            </p>
-          </div>
-        </header>
-
-        <div className="sheet empty-state">
-          <strong>Modulo indisponivel para viewer.</strong>
-          <p>Produtos, pedidos e relatorios continuam acessiveis com o seu perfil atual.</p>
-        </div>
-      </section>
-    );
+    return <Navigate replace to="/dashboard" />;
   }
 
   return <DeliveryPersonsAdminPage />;
 }
 
 function DeliveryPersonsAdminPage() {
-  const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('all');
   const [selectedDeliveryPersonId, setSelectedDeliveryPersonId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DeliveryPersonFormState>(emptyFormState);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
-  const [refreshNonce, setRefreshNonce] = useState(0);
-
-  useEffect(() => {
-    const reloadToken = refreshNonce;
-    const query = {
-      available: availabilityFilter === 'all' ? undefined : availabilityFilter === 'available',
-      isActive: activityFilter === 'all' ? undefined : activityFilter === 'active',
-    };
-
-    async function run() {
-      if (reloadToken < 0) {
-        return;
-      }
-
-      setIsLoading(true);
-      setListError(null);
-
-      try {
-        const response = await listDeliveryPersons(query);
-
-        setDeliveryPersons(response.data);
-      } catch (error) {
-        setDeliveryPersons([]);
-        setListError(toErrorMessage(error, 'Nao foi possivel carregar os entregadores.'));
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    void run();
-  }, [activityFilter, availabilityFilter, refreshNonce]);
+  const queryClient = useQueryClient();
+  const filters = {
+    available: availabilityFilter === 'all' ? undefined : availabilityFilter === 'available',
+    isActive: activityFilter === 'all' ? undefined : activityFilter === 'active',
+  };
+  const deliveryPersonsQuery = useQuery({
+    queryKey: ['delivery-persons', filters],
+    queryFn: () => listDeliveryPersons(filters),
+  });
+  const saveMutation = useMutation({
+    mutationFn: async (payload: SaveDeliveryPersonInput) =>
+      formMode === 'create' || !selectedDeliveryPersonId
+        ? createDeliveryPerson(payload)
+        : updateDeliveryPerson(selectedDeliveryPersonId, payload),
+    onSuccess: (savedDeliveryPerson) => {
+      void queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
+      setFeedback({
+        text:
+          formMode === 'create'
+            ? 'Entregador criado com sucesso.'
+            : 'Entregador atualizado com sucesso.',
+        tone: 'success',
+      });
+      setFormMode('edit');
+      setSelectedDeliveryPersonId(savedDeliveryPerson.id);
+      setDraft(toDeliveryPersonFormState(savedDeliveryPerson));
+    },
+    onError: (error) => {
+      setFeedback({
+        text: formatApiError(error, 'Nao foi possivel salvar o entregador.'),
+        tone: 'error',
+      });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deleteDeliveryPerson,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
+      setFeedback({
+        text: 'Entregador removido com sucesso.',
+        tone: 'success',
+      });
+      handleStartCreate();
+    },
+    onError: (error) => {
+      setFeedback({
+        text: formatApiError(error, 'Nao foi possivel excluir o entregador.'),
+        tone: 'error',
+      });
+    },
+  });
+  const deliveryPersons = deliveryPersonsQuery.data?.data ?? [];
+  const isLoading = deliveryPersonsQuery.isLoading;
+  const isSubmitting = saveMutation.isPending || deleteMutation.isPending;
+  const listError = deliveryPersonsQuery.error
+    ? formatApiError(deliveryPersonsQuery.error, 'Nao foi possivel carregar os entregadores.')
+    : null;
 
   function handleSelectDeliveryPerson(deliveryPerson: DeliveryPerson) {
     setFeedback(null);
@@ -147,35 +153,17 @@ function DeliveryPersonsAdminPage() {
       return;
     }
 
-    setIsSubmitting(true);
     setFeedback(null);
 
     const payload = toDeliveryPersonPayload(draft);
 
     try {
-      const savedDeliveryPerson =
-        formMode === 'create' || !selectedDeliveryPersonId
-          ? await createDeliveryPerson(payload)
-          : await updateDeliveryPerson(selectedDeliveryPersonId, payload);
-
-      setFeedback({
-        text:
-          formMode === 'create'
-            ? 'Entregador criado com sucesso.'
-            : 'Entregador atualizado com sucesso.',
-        tone: 'success',
-      });
-      setFormMode('edit');
-      setSelectedDeliveryPersonId(savedDeliveryPerson.id);
-      setDraft(toDeliveryPersonFormState(savedDeliveryPerson));
-      setRefreshNonce((current) => current + 1);
+      await saveMutation.mutateAsync(payload);
     } catch (error) {
       setFeedback({
-        text: toErrorMessage(error, 'Nao foi possivel salvar o entregador.'),
+        text: formatApiError(error, 'Nao foi possivel salvar o entregador.'),
         tone: 'error',
       });
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -184,27 +172,16 @@ function DeliveryPersonsAdminPage() {
       return;
     }
 
-    setIsSubmitting(true);
     setFeedback(null);
 
     try {
-      await deleteDeliveryPerson(selectedDeliveryPersonId);
-      setFeedback({
-        text: 'Entregador removido com sucesso.',
-        tone: 'success',
-      });
-      handleStartCreate();
-      setRefreshNonce((current) => current + 1);
+      await deleteMutation.mutateAsync(selectedDeliveryPersonId);
     } catch (error) {
       setFeedback({
-        text:
-          error instanceof ApiError && error.code === 'DELIVERY_PERSON_IN_USE'
-            ? 'Este entregador esta vinculado a uma entrega em andamento e nao pode ser removido.'
-            : toErrorMessage(error, 'Nao foi possivel excluir o entregador.'),
+        text: formatApiError(error, 'Nao foi possivel excluir o entregador.'),
         tone: 'error',
       });
     } finally {
-      setIsSubmitting(false);
       setIsDeleteConfirming(false);
     }
   }
@@ -593,8 +570,4 @@ function validateDeliveryPersonForm(draft: DeliveryPersonFormState) {
   }
 
   return null;
-}
-
-function toErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }

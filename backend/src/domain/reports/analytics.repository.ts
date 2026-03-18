@@ -1,41 +1,55 @@
-export type RevenueOrderRecord = {
-  deliveredAt: Date | null;
-  totalAmount: number;
+export type ReportDateWindow = {
+  startDate: string | null;
+  endDate: string | null;
 };
 
-export type OrdersByStatusRecord = {
-  status: string;
+export type RevenueSummaryRecord = ReportDateWindow & {
+  dailyRevenue: Array<{
+    date: string;
+    orders: number;
+    revenue: number;
+  }>;
+  totalOrders: number;
+  totalRevenue: number;
+};
+
+export type OrdersByStatusRecord = ReportDateWindow & {
+  total: number;
+  rows: Array<{
+    count: number;
+    status: string;
+  }>;
 };
 
 export type TopProductRecord = {
   productId: string;
   productName: string;
-  quantity: number;
-  unitPrice: number;
+  totalQuantity: number;
+  totalRevenue: number;
 };
 
-export type DeliveryTimeRecord = {
-  createdAt: Date;
-  deliveredAt: Date | null;
-  vehicleType: string | null;
+export type DeliveryTimeSummaryRecord = ReportDateWindow & {
+  averageMinutes: number;
+  fastestMinutes: number;
+  slowestMinutes: number;
+  totalDelivered: number;
+  byVehicleType: Array<{
+    averageMinutes: number;
+    count: number;
+    vehicleType: string;
+  }>;
 };
 
 export interface IAnalyticsRepository {
-  findDeliveredOrdersForRevenue(query: {
-    startDate?: string;
-    endDate?: string;
-  }): Promise<RevenueOrderRecord[]>;
-  findOrdersForStatusBreakdown(query: {
-    startDate?: string;
-    endDate?: string;
-  }): Promise<OrdersByStatusRecord[]>;
-  findDeliveredOrderItems(query: {
+  getRevenueSummary(query: { startDate?: string; endDate?: string }): Promise<RevenueSummaryRecord>;
+  getOrdersByStatus(query: { startDate?: string; endDate?: string }): Promise<OrdersByStatusRecord>;
+  getTopProducts(query: {
     startDate?: string;
     endDate?: string;
     limit: number;
   }): Promise<TopProductRecord[]>;
-  findDeliveredOrdersForDeliveryTime(query: {
+  getAverageDeliveryTimeSummary(query: {
     startDate?: string;
     endDate?: string;
-  }): Promise<DeliveryTimeRecord[]>;
+  }): Promise<DeliveryTimeSummaryRecord>;
 }
