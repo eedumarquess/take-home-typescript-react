@@ -35,15 +35,32 @@ enum VehicleType {
 }
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String   @unique
-  password  String
-  role      UserRole
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String           @id @default(uuid()) @db.Uuid
+  email           String           @unique
+  password        String
+  role            UserRole
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  refreshSessions RefreshSession[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
+}
+
+model RefreshSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid @map("user_id")
+  tokenId          String    @unique @map("token_id")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  replacedByTokenId String?  @map("replaced_by_token_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_refresh_sessions_user_id")
+  @@index([expiresAt], map: "idx_refresh_sessions_expires_at")
+  @@index([revokedAt], map: "idx_refresh_sessions_revoked_at")
+  @@map("refresh_sessions")
 }
 
 model Product {

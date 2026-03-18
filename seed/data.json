@@ -208,9 +208,7 @@
       "status": "pending",
       "createdAt": "2025-02-05T12:00:00.000Z",
       "updatedAt": "2025-02-05T12:00:00.000Z",
-      "statusEvents": [
-        { "status": "pending", "occurredAt": "2025-02-05T12:00:00.000Z" }
-      ],
+      "statusEvents": [{ "status": "pending", "occurredAt": "2025-02-05T12:00:00.000Z" }],
       "items": [{ "productIndex": 0, "quantity": 2 }, { "productIndex": 5, "quantity": 1 }]
     },
     {
@@ -386,9 +384,7 @@
       "status": "pending",
       "createdAt": "2025-02-05T13:50:00.000Z",
       "updatedAt": "2025-02-05T13:50:00.000Z",
-      "statusEvents": [
-        { "status": "pending", "occurredAt": "2025-02-05T13:50:00.000Z" }
-      ],
+      "statusEvents": [{ "status": "pending", "occurredAt": "2025-02-05T13:50:00.000Z" }],
       "items": [
         { "productIndex": 0, "quantity": 1 },
         { "productIndex": 10, "quantity": 1 },
