@@ -6,6 +6,7 @@ import {
   createOrder,
   getOrder,
   listOrders,
+  optimizeAssignment,
   updateOrderStatus,
 } from '../features/orders/api';
 import type { Order } from '../features/orders/types';
@@ -19,6 +20,7 @@ vi.mock('../features/orders/api', () => ({
   createOrder: vi.fn(),
   getOrder: vi.fn(),
   listOrders: vi.fn(),
+  optimizeAssignment: vi.fn(),
   updateOrderStatus: vi.fn(),
 }));
 
@@ -35,6 +37,7 @@ const getOrderMock = vi.mocked(getOrder);
 const createOrderMock = vi.mocked(createOrder);
 const updateOrderStatusMock = vi.mocked(updateOrderStatus);
 const assignDeliveryPersonMock = vi.mocked(assignDeliveryPerson);
+const optimizeAssignmentMock = vi.mocked(optimizeAssignment);
 const listProductsMock = vi.mocked(listProducts);
 const listDeliveryPersonsMock = vi.mocked(listDeliveryPersons);
 
@@ -122,6 +125,21 @@ describe('OrdersPage', () => {
           vehicleType: 'motorcycle',
         },
       ],
+    });
+    optimizeAssignmentMock.mockResolvedValue({
+      algorithm: 'hungarian',
+      assignments: [
+        {
+          deliveryPersonId: 'delivery-1',
+          deliveryPersonName: 'Carlos Santos',
+          estimatedDistanceKm: 2.4,
+          orderAddress: 'Rua das Flores, 123, Sao Paulo - SP',
+          orderId: 'order-ready',
+        },
+      ],
+      executionTimeMs: 12,
+      totalDistanceKm: 2.4,
+      unassigned: [],
     });
   });
 
@@ -234,6 +252,48 @@ describe('OrdersPage', () => {
     expect(
       await screen.findByText('Este entregador ja esta atribuido a outro pedido em andamento'),
     ).toBeInTheDocument();
+  });
+
+  it('loads optimized suggestions and applies the selected assignment flow', async () => {
+    const user = userEvent.setup();
+
+    listOrdersMock.mockResolvedValue({
+      data: [readyOrder],
+      pagination: {
+        limit: 20,
+        page: 1,
+        total: 1,
+        totalPages: 1,
+      },
+    });
+    updateOrderStatusMock.mockResolvedValue(
+      buildOrder({
+        deliveryPerson: {
+          id: 'delivery-1',
+          name: 'Carlos Santos',
+          phone: '(11) 91234-5678',
+          vehicleType: 'motorcycle',
+        },
+        id: 'order-ready',
+        status: 'delivering',
+      }),
+    );
+
+    renderOrdersPage('admin');
+    await screen.findByText('Joao Silva');
+
+    await user.click(screen.getByRole('button', { name: 'Sugerir atribuicao otimizada' }));
+
+    expect(await screen.findByText('Carlos Santos')).toBeInTheDocument();
+    expect(optimizeAssignmentMock).toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Aceitar e iniciar entrega' }));
+
+    await waitFor(() => {
+      expect(assignDeliveryPersonMock).toHaveBeenCalledWith('order-ready', 'delivery-1');
+      expect(updateOrderStatusMock).toHaveBeenCalledWith('order-ready', 'delivering');
+    });
+    expect(await screen.findByText('Sugestao aplicada para Joao Silva.')).toBeInTheDocument();
   });
 });
 
